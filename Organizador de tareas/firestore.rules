@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        (request.auth.token.email == "fundacionsocial@gimnasioemocionalmb.com" && request.auth.token.email_verified == true));
+    }
+
+    // ===============================================================
+    // Users Collection
+    // ===============================================================
+    match /users/{userId} {
+      // Anyone authenticated can read user profiles to assign tasks
+      allow read: if isAuthenticated();
+      
+      // Users can create their own profile. Only admins can set role to 'admin' initially, 
+      // but we allow the first user to be admin via the helper function.
+      allow create: if isOwner(userId) && 
+                    request.resource.data.keys().hasAll(['uid', 'email', 'role']) &&
+                    request.resource.data.uid == userId &&
+                    (request.resource.data.role == 'collaborator' || isAdmin());
+                    
+      // Users can update their own profile, but cannot change their role unless admin
+      allow update: if isOwner(userId) && 
+                    request.resource.data.uid == resource.data.uid &&
+                    (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    // ===============================================================
+    // Tasks Collection
+    // ===============================================================
+    match /tasks/{taskId} {
+      // All authenticated users in the workspace can read tasks
+      allow read: if isAuthenticated();
+      
+      // Any authenticated user can create a task
+      allow create: if isAuthenticated() &&
+                    request.resource.data.keys().hasAll(['title', 'status', 'priority', 'createdBy', 'createdAt', 'updatedAt']) &&
+                    request.resource.data.createdBy == request.auth.uid;
+                    
+      // Any authenticated user can update a task (to change status, add notes, etc.)
+      allow update: if isAuthenticated() &&
+                    request.resource.data.createdBy == resource.data.createdBy && // createdBy is immutable
+                    request.resource.data.createdAt == resource.data.createdAt;   // createdAt is immutable
+                    
+      // Only creator or admin can delete
+      allow delete: if isAuthenticated() && (resource.data.createdBy == request.auth.uid || isAdmin());
+    }
+
+    // ===============================================================
+    // Notifications Collection
+    // ===============================================================
+    match /notifications/{notificationId} {
+      // Users can only read their own notifications
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // System/users can create notifications for others
+      allow create: if isAuthenticated() &&
+                    request.resource.data.keys().hasAll(['userId', 'title', 'message', 'read', 'createdAt']);
+                    
+      // Users can only update their own notifications (e.g., mark as read)
+      allow update: if isAuthenticated() && 
+                    resource.data.userId == request.auth.uid &&
+                    request.resource.data.userId == resource.data.userId;
+                    
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Activity Logs Collection
+    // ===============================================================
+    match /activity_logs/{logId} {
+      allow read: if isAuthenticated();
+      
+      allow create: if isAuthenticated() &&
+                    request.resource.data.keys().hasAll(['taskId', 'userId', 'action', 'timestamp']) &&
+                    request.resource.data.userId == request.auth.uid;
+                    
+      allow update, delete: if false; // Logs are immutable
+    }
+  }
+}
