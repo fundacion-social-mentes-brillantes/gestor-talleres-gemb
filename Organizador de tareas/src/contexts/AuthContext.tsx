@@ -21,8 +21,11 @@ const OAUTH_FLAG_MAX_AGE_MS = 10 * 60 * 1000;
 interface BrowserContextInfo {
   isMobile: boolean;
   isIOS: boolean;
+  isAndroid: boolean;
   isBrave: boolean;
   isEmbedded: boolean;
+  /** Brave on any mobile platform — should NOT attempt redirect auth */
+  isBraveMobile: boolean;
   browserName: string;
   recommendedBrowser: string;
 }
@@ -36,6 +39,8 @@ interface AuthContextType {
   browserHelpText: string | null;
   isLoggingIn: boolean;
   isEmbeddedBrowser: boolean;
+  isIOS: boolean;
+  isAndroid: boolean;
   shouldSuggestExternalBrowser: boolean;
   openInCompatibleBrowser: () => void;
   copyCurrentLink: () => Promise<boolean>;
@@ -127,6 +132,7 @@ function detectBrowserContext(): BrowserContextInfo {
   const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent || '';
   const vendor = typeof navigator === 'undefined' ? '' : navigator.vendor || '';
   const isIOS = /iPhone|iPad|iPod/i.test(userAgent);
+  const isAndroid = /android/i.test(userAgent);
   const isMobile = /android|iphone|ipad|ipod|mobile/i.test(userAgent);
   const isBrave = /Brave/i.test(userAgent)
     || (typeof navigator !== 'undefined' && 'brave' in navigator);
@@ -136,16 +142,21 @@ function detectBrowserContext(): BrowserContextInfo {
   const isLine = /Line/i.test(userAgent);
   const isTelegram = /Telegram/i.test(userAgent);
   const isEmbedded = isWhatsApp || isInstagram || isFacebook || isLine || isTelegram;
+  // Brave on any mobile device cannot complete Firebase redirect reliably
+  const isBraveMobile = isBrave && isMobile;
 
   let browserName = 'este navegador';
   if (/CriOS/i.test(userAgent)) browserName = 'Chrome';
   else if (isBrave) browserName = 'Brave';
   else if (/Safari/i.test(userAgent) && /Apple/i.test(vendor)) browserName = 'Safari';
+  else if (/Chrome/i.test(userAgent) && !/Chromium/i.test(userAgent)) browserName = 'Chrome';
 
   return {
     isMobile,
     isIOS,
+    isAndroid,
     isBrave,
+    isBraveMobile,
     isEmbedded,
     browserName,
     recommendedBrowser: isIOS ? 'Safari' : 'Chrome',
@@ -155,6 +166,10 @@ function detectBrowserContext(): BrowserContextInfo {
 function getBrowserHelpText(browserContext: BrowserContextInfo) {
   if (browserContext.isIOS) {
     return 'Abre este enlace en Safari. En iPhone, toca el menu del navegador actual y elige "Abrir en Safari". Si no aparece, copia el enlace y pegalo manualmente en Safari.';
+  }
+
+  if (browserContext.isAndroid) {
+    return 'Abre este enlace en Chrome. En Android, toca el menu del navegador actual y elige "Abrir en Chrome". Si no aparece, copia el enlace y pegalo en Chrome.';
   }
 
   return `Abre este enlace en ${browserContext.recommendedBrowser} para iniciar sesion con mas estabilidad.`;
@@ -235,9 +250,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setShouldSuggestExternalBrowser(true);
       setBrowserHelpText(getBrowserHelpText(browserContext));
       setAuthNotice(`Estas abriendo la app dentro de un navegador embebido. Para iniciar sesion usa ${browserContext.recommendedBrowser}.`);
-    } else if (browserContext.isBrave && browserContext.isIOS) {
+    } else if (browserContext.isBraveMobile) {
+      // Brave mobile (iOS or Android) cannot complete Firebase redirect auth reliably
+      setShouldSuggestExternalBrowser(true);
       setBrowserHelpText(getBrowserHelpText(browserContext));
-      setAuthNotice('Si el redirect no completa en iPhone, abre la app en Safari para una sesion mas estable.');
+      setAuthNotice(`Brave en celular no es compatible con el inicio de sesion. Abre la app en ${browserContext.recommendedBrowser} para continuar.`);
     }
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -384,10 +401,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const latestContext = detectBrowserContext();
 
+    // Hard block: embedded browsers (WhatsApp, Instagram, etc.)
     if (latestContext.isEmbedded) {
       setOAuthFlag(latestContext);
       setAuthErrorCode('auth/embedded-browser-blocked');
       setAuthError(getAuthErrorMessage('auth/embedded-browser-blocked', latestContext));
+      setBrowserHelpText(getBrowserHelpText(latestContext));
+      setShouldSuggestExternalBrowser(true);
+      setIsLoggingIn(false);
+      return;
+    }
+
+    // Hard block: Brave on any mobile — redirect auth never completes reliably
+    if (latestContext.isBraveMobile) {
+      setAuthErrorCode('auth/embedded-browser-blocked');
+      setAuthError(
+        `Brave en celular no es compatible con el inicio de sesion de Google. Abre este enlace en ${latestContext.recommendedBrowser}.`
+      );
       setBrowserHelpText(getBrowserHelpText(latestContext));
       setShouldSuggestExternalBrowser(true);
       setIsLoggingIn(false);
@@ -414,11 +444,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setOAuthFlag(latestContext);
 
     try {
-      if (latestContext.isMobile) {
-        await signInWithRedirect(auth, googleProvider);
-        return;
-      }
-
+      // Always try signInWithPopup first — avoids cross-domain redirect issues on mobile.
+      // signInWithRedirect is used only as a fallback when popup is unavailable.
       await signInWithPopup(auth, googleProvider);
       clearOAuthFlag();
     } catch (error) {
@@ -445,10 +472,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      setAuthErrorCode(code);
-      setAuthError(getAuthErrorMessage(code, latestContext));
-      setBrowserHelpText(getBrowserHelpText(latestContext));
-      console.error('Error logging in:', error);
+      const userCancelled = code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request';
+      if (!userCancelled) {
+        setAuthErrorCode(code);
+        setAuthError(getAuthErrorMessage(code, latestContext));
+        setBrowserHelpText(getBrowserHelpText(latestContext));
+        console.error('Error logging in:', error);
+      }
       setIsLoggingIn(false);
       clearOAuthFlag();
     }
@@ -473,6 +503,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         browserHelpText,
         isLoggingIn,
         isEmbeddedBrowser: browserContext.isEmbedded,
+        isIOS: browserContext.isIOS,
+        isAndroid: browserContext.isAndroid,
         shouldSuggestExternalBrowser,
         openInCompatibleBrowser,
         copyCurrentLink,
