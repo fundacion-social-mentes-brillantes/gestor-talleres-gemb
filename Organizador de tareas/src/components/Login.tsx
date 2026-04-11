@@ -1,9 +1,17 @@
 import React from 'react';
-import { AlertCircle, LayoutDashboard } from 'lucide-react';
+import { AlertCircle, ExternalLink, Info, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export function Login() {
-  const { login, authError, authErrorCode, isLoggingIn } = useAuth();
+  const {
+    login,
+    authError,
+    authErrorCode,
+    authNotice,
+    isLoggingIn,
+    shouldSuggestExternalBrowser,
+    openInCompatibleBrowser,
+  } = useAuth();
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -36,16 +44,36 @@ export function Login() {
             </div>
           )}
 
+          {authNotice && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <div className="flex items-start gap-2">
+                <Info size={18} className="mt-0.5 shrink-0" />
+                <p>{authNotice}</p>
+              </div>
+            </div>
+          )}
+
           <button
             onClick={login}
             disabled={isLoggingIn}
             className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
           >
-            {isLoggingIn ? 'Abriendo Google...' : 'Iniciar sesion con Google'}
+            {isLoggingIn ? 'Preparando inicio de sesion...' : 'Iniciar sesion con Google'}
           </button>
 
+          {shouldSuggestExternalBrowser && (
+            <button
+              type="button"
+              onClick={openInCompatibleBrowser}
+              className="mt-3 w-full flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <ExternalLink size={16} />
+              Abrir en navegador compatible
+            </button>
+          )}
+
           <p className="mt-3 text-center text-xs text-gray-500">
-            Si el popup falla o tu navegador lo bloquea, la app intentara continuar con redireccion.
+            En iPhone recomendamos usar Safari o Chrome y evitar navegadores embebidos de WhatsApp, Instagram o Facebook.
           </p>
         </div>
       </div>
