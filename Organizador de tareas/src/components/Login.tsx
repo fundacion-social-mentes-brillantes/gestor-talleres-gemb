@@ -1,9 +1,9 @@
 import React from 'react';
+import { AlertCircle, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { LayoutDashboard } from 'lucide-react';
 
 export function Login() {
-  const { login } = useAuth();
+  const { login, authError, authErrorCode, isLoggingIn } = useAuth();
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -23,12 +23,30 @@ export function Login() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-xl sm:px-10 border border-gray-100">
+          {authError && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div className="flex items-start gap-2">
+                <AlertCircle size={18} className="mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-medium">No se pudo iniciar sesion</p>
+                  <p>{authError}</p>
+                  {authErrorCode && <p className="mt-1 font-mono text-xs">{authErrorCode}</p>}
+                </div>
+              </div>
+            </div>
+          )}
+
           <button
             onClick={login}
-            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            disabled={isLoggingIn}
+            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
           >
-            Iniciar sesión con Google
+            {isLoggingIn ? 'Abriendo Google...' : 'Iniciar sesion con Google'}
           </button>
+
+          <p className="mt-3 text-center text-xs text-gray-500">
+            Si el popup falla o tu navegador lo bloquea, la app intentara continuar con redireccion.
+          </p>
         </div>
       </div>
     </div>
