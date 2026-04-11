@@ -13,6 +13,8 @@ export function Login() {
     shouldSuggestExternalBrowser,
     openInCompatibleBrowser,
     copyCurrentLink,
+    isIOS,
+    isAndroid,
   } = useAuth();
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
@@ -63,7 +65,13 @@ export function Login() {
 
           {browserHelpText && (
             <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-              <p className="font-medium">Abre este enlace en Safari</p>
+              <p className="font-medium">
+                {isIOS
+                  ? 'Abre este enlace en Safari'
+                  : isAndroid
+                  ? 'Abre este enlace en Chrome'
+                  : 'Abre en un navegador compatible'}
+              </p>
               <p className="mt-1">{browserHelpText}</p>
             </div>
           )}
@@ -84,7 +92,7 @@ export function Login() {
                 className="mt-3 w-full flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 <ExternalLink size={16} />
-                Abrir en navegador compatible
+                {isAndroid ? 'Abrir en Chrome' : isIOS ? 'Abrir en Safari' : 'Abrir en navegador compatible'}
               </button>
 
               <button
@@ -101,7 +109,11 @@ export function Login() {
           )}
 
           <p className="mt-3 text-center text-xs text-gray-500">
-            En iPhone recomendamos usar Safari o Chrome y evitar navegadores embebidos de WhatsApp, Instagram o Facebook.
+            {isIOS
+              ? 'En iPhone recomendamos usar Safari o Chrome y evitar navegadores embebidos de WhatsApp, Instagram o Facebook.'
+              : isAndroid
+              ? 'En Android recomendamos usar Chrome y evitar navegadores embebidos de WhatsApp, Instagram o Facebook.'
+              : 'Recomendamos usar Chrome o Safari y evitar navegadores embebidos.'}
           </p>
         </div>
       </div>
