@@ -1,5 +1,5 @@
-import React from 'react';
-import { AlertCircle, ExternalLink, Info, LayoutDashboard } from 'lucide-react';
+import React, { useState } from 'react';
+import { AlertCircle, Copy, ExternalLink, Info, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export function Login() {
@@ -8,10 +8,18 @@ export function Login() {
     authError,
     authErrorCode,
     authNotice,
+    browserHelpText,
     isLoggingIn,
     shouldSuggestExternalBrowser,
     openInCompatibleBrowser,
+    copyCurrentLink,
   } = useAuth();
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+
+  const handleCopyLink = async () => {
+    const copied = await copyCurrentLink();
+    setCopyFeedback(copied ? 'Enlace copiado.' : 'No se pudo copiar el enlace en este navegador.');
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -53,6 +61,13 @@ export function Login() {
             </div>
           )}
 
+          {browserHelpText && (
+            <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+              <p className="font-medium">Abre este enlace en Safari</p>
+              <p className="mt-1">{browserHelpText}</p>
+            </div>
+          )}
+
           <button
             onClick={login}
             disabled={isLoggingIn}
@@ -62,14 +77,27 @@ export function Login() {
           </button>
 
           {shouldSuggestExternalBrowser && (
-            <button
-              type="button"
-              onClick={openInCompatibleBrowser}
-              className="mt-3 w-full flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              <ExternalLink size={16} />
-              Abrir en navegador compatible
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={openInCompatibleBrowser}
+                className="mt-3 w-full flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <ExternalLink size={16} />
+                Abrir en navegador compatible
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCopyLink}
+                className="mt-3 w-full flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <Copy size={16} />
+                Copiar enlace
+              </button>
+
+              {copyFeedback && <p className="mt-2 text-center text-xs text-gray-500">{copyFeedback}</p>}
+            </>
           )}
 
           <p className="mt-3 text-center text-xs text-gray-500">

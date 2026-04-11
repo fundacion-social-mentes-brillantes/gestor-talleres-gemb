@@ -16,6 +16,7 @@ import { User } from '../types';
 const OAUTH_IN_PROGRESS_KEY = 'oauth_in_progress';
 const OAUTH_CONTEXT_KEY = 'oauth_browser_context';
 const OAUTH_STARTED_AT_KEY = 'oauth_started_at';
+const OAUTH_FLAG_MAX_AGE_MS = 10 * 60 * 1000;
 
 interface BrowserContextInfo {
   isMobile: boolean;
@@ -32,10 +33,12 @@ interface AuthContextType {
   authError: string | null;
   authErrorCode: string | null;
   authNotice: string | null;
+  browserHelpText: string | null;
   isLoggingIn: boolean;
   isEmbeddedBrowser: boolean;
   shouldSuggestExternalBrowser: boolean;
   openInCompatibleBrowser: () => void;
+  copyCurrentLink: () => Promise<boolean>;
   login: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -84,12 +87,21 @@ function readOAuthFlag() {
     const inProgress = storage.getItem(OAUTH_IN_PROGRESS_KEY) === '1';
     const rawContext = storage.getItem(OAUTH_CONTEXT_KEY);
     const startedAt = storage.getItem(OAUTH_STARTED_AT_KEY);
+    const startedAtMs = startedAt ? Number(startedAt) : null;
+    const isExpired = !startedAtMs || Number.isNaN(startedAtMs) || Date.now() - startedAtMs > OAUTH_FLAG_MAX_AGE_MS;
 
     if (inProgress || rawContext || startedAt) {
+      if (isExpired) {
+        storage.removeItem(OAUTH_IN_PROGRESS_KEY);
+        storage.removeItem(OAUTH_CONTEXT_KEY);
+        storage.removeItem(OAUTH_STARTED_AT_KEY);
+        continue;
+      }
+
       return {
         inProgress,
         rawContext,
-        startedAt: startedAt ? Number(startedAt) : null,
+        startedAt: startedAtMs,
       };
     }
   }
@@ -138,6 +150,14 @@ function detectBrowserContext(): BrowserContextInfo {
     browserName,
     recommendedBrowser: isIOS ? 'Safari' : 'Chrome',
   };
+}
+
+function getBrowserHelpText(browserContext: BrowserContextInfo) {
+  if (browserContext.isIOS) {
+    return 'Abre este enlace en Safari. En iPhone, toca el menu del navegador actual y elige "Abrir en Safari". Si no aparece, copia el enlace y pegalo manualmente en Safari.';
+  }
+
+  return `Abre este enlace en ${browserContext.recommendedBrowser} para iniciar sesion con mas estabilidad.`;
 }
 
 function getFirebaseErrorCode(error: unknown) {
@@ -193,6 +213,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authErrorCode, setAuthErrorCode] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
+  const [browserHelpText, setBrowserHelpText] = useState<string | null>(null);
   const [shouldSuggestExternalBrowser, setShouldSuggestExternalBrowser] = useState(false);
   const browserContext = useMemo(() => detectBrowserContext(), []);
 
@@ -212,8 +233,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (browserContext.isEmbedded) {
       setShouldSuggestExternalBrowser(true);
+      setBrowserHelpText(getBrowserHelpText(browserContext));
       setAuthNotice(`Estas abriendo la app dentro de un navegador embebido. Para iniciar sesion usa ${browserContext.recommendedBrowser}.`);
     } else if (browserContext.isBrave && browserContext.isIOS) {
+      setBrowserHelpText(getBrowserHelpText(browserContext));
       setAuthNotice('Si el redirect no completa en iPhone, abre la app en Safari para una sesion mas estable.');
     }
 
@@ -245,6 +268,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setAuthError(null);
           setAuthErrorCode(null);
           setAuthNotice(null);
+          setBrowserHelpText(null);
           setShouldSuggestExternalBrowser(false);
         } catch (error) {
           handleFirestoreError(error, OperationType.GET, 'users');
@@ -264,6 +288,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (persistenceResult.mode === 'none') {
         setAuthErrorCode('auth/persistence-unavailable');
         setAuthError(getAuthErrorMessage('auth/persistence-unavailable'));
+        setBrowserHelpText(getBrowserHelpText(browserContext));
         setShouldSuggestExternalBrowser(true);
       } else if (persistenceResult.mode === 'session') {
         setAuthNotice('La sesion se guardara solo durante esta pestana para maximizar compatibilidad en este navegador.');
@@ -285,6 +310,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           setAuthErrorCode(code);
           setAuthError(getAuthErrorMessage(code, contextForMessage));
+          setBrowserHelpText(getBrowserHelpText(contextForMessage));
           setShouldSuggestExternalBrowser(true);
         }
       } catch (error) {
@@ -293,6 +319,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const code = getFirebaseErrorCode(error);
         setAuthErrorCode(code);
         setAuthError(getAuthErrorMessage(code, pendingBrowserContext || browserContext));
+        setBrowserHelpText(getBrowserHelpText(pendingBrowserContext || browserContext));
         console.error('Error finishing redirect login:', error);
       }
 
@@ -309,6 +336,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const code = contextForMessage?.isEmbedded ? 'auth/embedded-browser-blocked' : 'auth/redirect-not-completed';
         setAuthErrorCode(code);
         setAuthError(getAuthErrorMessage(code, contextForMessage));
+        setBrowserHelpText(getBrowserHelpText(contextForMessage));
         setShouldSuggestExternalBrowser(true);
       }
 
@@ -324,7 +352,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const openInCompatibleBrowser = () => {
     if (typeof window === 'undefined') return;
+
+    if (typeof navigator !== 'undefined' && 'share' in navigator && browserContext.isMobile) {
+      navigator.share({ url: window.location.href, title: document.title }).catch(() => {});
+      return;
+    }
+
     window.open(window.location.href, '_blank', 'noopener,noreferrer');
+  };
+
+  const copyCurrentLink = async () => {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined' || !navigator.clipboard) {
+      return false;
+    }
+
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setAuthNotice(browserContext.isIOS
+        ? 'Enlace copiado. Ahora abre Safari y pega el enlace para iniciar sesion.'
+        : `Enlace copiado. Abrelo en ${browserContext.recommendedBrowser}.`);
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   const login = async () => {
@@ -338,6 +388,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setOAuthFlag(latestContext);
       setAuthErrorCode('auth/embedded-browser-blocked');
       setAuthError(getAuthErrorMessage('auth/embedded-browser-blocked', latestContext));
+      setBrowserHelpText(getBrowserHelpText(latestContext));
       setShouldSuggestExternalBrowser(true);
       setIsLoggingIn(false);
       return;
@@ -348,6 +399,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (persistenceResult.mode === 'none') {
       setAuthErrorCode('auth/persistence-unavailable');
       setAuthError(getAuthErrorMessage('auth/persistence-unavailable', latestContext));
+      setBrowserHelpText(getBrowserHelpText(latestContext));
       setShouldSuggestExternalBrowser(true);
       setIsLoggingIn(false);
       return;
@@ -385,6 +437,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const redirectCode = getFirebaseErrorCode(redirectError);
           setAuthErrorCode(redirectCode);
           setAuthError(getAuthErrorMessage(redirectCode, latestContext));
+          setBrowserHelpText(getBrowserHelpText(latestContext));
           console.error('Error logging in with redirect fallback:', redirectError);
           setIsLoggingIn(false);
           clearOAuthFlag();
@@ -394,6 +447,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setAuthErrorCode(code);
       setAuthError(getAuthErrorMessage(code, latestContext));
+      setBrowserHelpText(getBrowserHelpText(latestContext));
       console.error('Error logging in:', error);
       setIsLoggingIn(false);
       clearOAuthFlag();
@@ -416,10 +470,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         authError,
         authErrorCode,
         authNotice,
+        browserHelpText,
         isLoggingIn,
         isEmbeddedBrowser: browserContext.isEmbedded,
         shouldSuggestExternalBrowser,
         openInCompatibleBrowser,
+        copyCurrentLink,
         login,
         logout,
       }}
