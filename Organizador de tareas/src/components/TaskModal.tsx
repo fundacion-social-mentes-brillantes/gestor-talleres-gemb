@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { Task, TaskPriority, TaskStatus, User } from '../types';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,14 +9,6 @@ interface TaskModalProps {
   onClose: () => void;
   onSave: (taskData: any) => Promise<void>;
   onDelete?: (taskId: string) => Promise<void>;
-}
-
-function scrollFieldIntoView(target: HTMLElement | null) {
-  if (!target || typeof window === 'undefined') return;
-
-  window.requestAnimationFrame(() => {
-    target.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  });
 }
 
 export function TaskModal({ task, users, onClose, onSave, onDelete }: TaskModalProps) {
@@ -31,13 +23,6 @@ export function TaskModal({ task, users, onClose, onSave, onDelete }: TaskModalP
   const [newSubtask, setNewSubtask] = useState('');
   const [notes, setNotes] = useState(task?.notes || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const titleInputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    if (!task) {
-      scrollFieldIntoView(titleInputRef.current);
-    }
-  }, [task]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,13 +100,11 @@ export function TaskModal({ task, users, onClose, onSave, onDelete }: TaskModalP
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Titulo</label>
                 <input
-                  ref={titleInputRef}
                   type="text"
                   required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2 text-base outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                   placeholder="Ej. Revisar diseno de la landing page"
                 />
               </div>
@@ -132,8 +115,7 @@ export function TaskModal({ task, users, onClose, onSave, onDelete }: TaskModalP
                   <select
                     value={status}
                     onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                    onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 text-base outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="pending">Pendiente</option>
                     <option value="in_progress">En Proceso</option>
@@ -147,8 +129,7 @@ export function TaskModal({ task, users, onClose, onSave, onDelete }: TaskModalP
                   <select
                     value={priority}
                     onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                    onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 text-base outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="low">Baja</option>
                     <option value="medium">Media</option>
@@ -163,8 +144,7 @@ export function TaskModal({ task, users, onClose, onSave, onDelete }: TaskModalP
                     type="date"
                     value={dueDate}
                     onChange={(e) => setDueDate(e.target.value)}
-                    onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 text-base outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -199,9 +179,8 @@ export function TaskModal({ task, users, onClose, onSave, onDelete }: TaskModalP
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
                   rows={3}
-                  className="w-full resize-none rounded-lg border border-gray-300 px-4 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                  className="w-full resize-none rounded-lg border border-gray-300 px-4 py-2 text-base outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                   placeholder="Detalles adicionales del trabajo..."
                 />
               </div>
@@ -231,9 +210,8 @@ export function TaskModal({ task, users, onClose, onSave, onDelete }: TaskModalP
                     type="text"
                     value={newSubtask}
                     onChange={(e) => setNewSubtask(e.target.value)}
-                    onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
                     onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())}
-                    className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-base outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                     placeholder="Anadir subtarea..."
                   />
                   <button
@@ -252,9 +230,8 @@ export function TaskModal({ task, users, onClose, onSave, onDelete }: TaskModalP
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
                   rows={3}
-                  className="w-full resize-none rounded-lg border border-gray-300 bg-yellow-50 px-4 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                  className="w-full resize-none rounded-lg border border-gray-300 bg-yellow-50 px-4 py-2 text-base outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                   placeholder="Notas privadas o comentarios..."
                 />
               </div>
