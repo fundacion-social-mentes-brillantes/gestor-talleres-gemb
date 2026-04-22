@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Task, TaskPriority, TaskStatus, User } from '../types';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,6 +9,14 @@ interface TaskModalProps {
   onClose: () => void;
   onSave: (taskData: any) => Promise<void>;
   onDelete?: (taskId: string) => Promise<void>;
+}
+
+function scrollFieldIntoView(target: HTMLElement | null) {
+  if (!target || typeof window === 'undefined') return;
+
+  window.requestAnimationFrame(() => {
+    target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  });
 }
 
 export function TaskModal({ task, users, onClose, onSave, onDelete }: TaskModalProps) {
@@ -23,6 +31,13 @@ export function TaskModal({ task, users, onClose, onSave, onDelete }: TaskModalP
   const [newSubtask, setNewSubtask] = useState('');
   const [notes, setNotes] = useState(task?.notes || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!task) {
+      scrollFieldIntoView(titleInputRef.current);
+    }
+  }, [task]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,214 +76,232 @@ export function TaskModal({ task, users, onClose, onSave, onDelete }: TaskModalP
   };
 
   const toggleSubtask = (id: string) => {
-    setSubtasks(subtasks.map(st => st.id === id ? { ...st, isCompleted: !st.isCompleted } : st));
+    setSubtasks(subtasks.map((st) => st.id === id ? { ...st, isCompleted: !st.isCompleted } : st));
   };
 
   const removeSubtask = (id: string) => {
-    setSubtasks(subtasks.filter(st => st.id !== id));
+    setSubtasks(subtasks.filter((st) => st.id !== id));
   };
 
   const toggleAssignee = (uid: string) => {
     if (assignees.includes(uid)) {
-      setAssignees(assignees.filter(id => id !== uid));
+      setAssignees(assignees.filter((id) => id !== uid));
     } else {
       setAssignees([...assignees, uid]);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 md:p-4">
-      <div className="bg-white md:rounded-xl shadow-xl w-full h-full md:h-auto md:max-h-[90vh] md:max-w-3xl flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 md:p-6 border-b border-gray-200 sticky top-0 bg-white z-10 md:rounded-t-xl">
-          <h2 className="text-xl font-bold text-gray-900">
-            {task ? 'Editar Trabajo' : 'Nuevo Trabajo'}
-          </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1">
-            <X size={24} />
-          </button>
-        </div>
+    <div className="fixed inset-0 z-50 bg-black/50 md:p-4">
+      <div className="flex h-[100dvh] items-stretch justify-center md:h-auto md:items-center">
+        <div className="flex h-[100dvh] w-full flex-col bg-white shadow-xl md:h-auto md:max-h-[90dvh] md:max-w-3xl md:rounded-xl">
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-4 md:rounded-t-xl md:px-6 md:py-6">
+            <h2 className="text-xl font-bold text-gray-900">
+              {task ? 'Editar Trabajo' : 'Nuevo Trabajo'}
+            </h2>
+            <button onClick={onClose} className="p-1 text-gray-400 transition-colors hover:text-gray-600">
+              <X size={24} />
+            </button>
+          </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6">
-          <form id="task-form" onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Título</label>
-              <input
-                type="text"
-                required
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                placeholder="Ej. Revisar diseño de la landing page"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div
+            className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-6"
+            style={{
+              scrollPaddingTop: 'calc(5.5rem + env(safe-area-inset-top, 0px))',
+              scrollPaddingBottom: 'calc(8rem + env(safe-area-inset-bottom, 0px))',
+            }}
+          >
+            <form id="task-form" onSubmit={handleSubmit} className="space-y-6 pb-24 md:pb-0">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                >
-                  <option value="pending">Pendiente</option>
-                  <option value="in_progress">En Proceso</option>
-                  <option value="on_hold">En Espera</option>
-                  <option value="completed">Completado</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Prioridad</label>
-                <select
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                >
-                  <option value="low">Baja</option>
-                  <option value="medium">Media</option>
-                  <option value="high">Alta</option>
-                  <option value="urgent">Urgente</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Límite</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Titulo</label>
                 <input
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  ref={titleInputRef}
+                  type="text"
+                  required
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ej. Revisar diseno de la landing page"
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Asignar a</label>
-                <div className="flex flex-wrap gap-2">
-                  {users.map(u => (
-                    <button
-                      key={u.uid}
-                      type="button"
-                      onClick={() => toggleAssignee(u.uid)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors border ${
-                        assignees.includes(u.uid) 
-                          ? 'bg-blue-50 border-blue-200 text-blue-700' 
-                          : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      <img 
-                        src={u.photoURL || `https://ui-avatars.com/api/?name=${u.displayName}`} 
-                        alt={u.displayName} 
-                        className="w-5 h-5 rounded-full"
-                      />
-                      {u.displayName.split(' ')[0]}
-                    </button>
-                  ))}
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Estado</label>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as TaskStatus)}
+                    onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="pending">Pendiente</option>
+                    <option value="in_progress">En Proceso</option>
+                    <option value="on_hold">En Espera</option>
+                    <option value="completed">Completado</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Prioridad</label>
+                  <select
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value as TaskPriority)}
+                    onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="low">Baja</option>
+                    <option value="medium">Media</option>
+                    <option value="high">Alta</option>
+                    <option value="urgent">Urgente</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Fecha Limite</label>
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">Asignar a</label>
+                  <div className="flex flex-wrap gap-2">
+                    {users.map((u) => (
+                      <button
+                        key={u.uid}
+                        type="button"
+                        onClick={() => toggleAssignee(u.uid)}
+                        className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                          assignees.includes(u.uid)
+                            ? 'border-blue-200 bg-blue-50 text-blue-700'
+                            : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <img
+                          src={u.photoURL || `https://ui-avatars.com/api/?name=${u.displayName}`}
+                          alt={u.displayName}
+                          className="h-5 w-5 rounded-full"
+                        />
+                        {u.displayName.split(' ')[0]}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
-                placeholder="Detalles adicionales del trabajo..."
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Subtareas (Checklist)</label>
-              <div className="space-y-2 mb-3">
-                {subtasks.map(st => (
-                  <div key={st.id} className="flex items-center gap-3 bg-gray-50 px-3 py-2 rounded-lg border border-gray-100">
-                    <input
-                      type="checkbox"
-                      checked={st.isCompleted}
-                      onChange={() => toggleSubtask(st.id)}
-                      className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                    />
-                    <span className={`flex-1 text-sm ${st.isCompleted ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
-                      {st.title}
-                    </span>
-                    <button type="button" onClick={() => removeSubtask(st.id)} className="text-gray-400 hover:text-red-500">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newSubtask}
-                  onChange={(e) => setNewSubtask(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
-                  placeholder="Añadir subtarea..."
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Descripcion</label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
+                  rows={3}
+                  className="w-full resize-none rounded-lg border border-gray-300 px-4 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                  placeholder="Detalles adicionales del trabajo..."
                 />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">Subtareas (Checklist)</label>
+                <div className="mb-3 space-y-2">
+                  {subtasks.map((st) => (
+                    <div key={st.id} className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={st.isCompleted}
+                        onChange={() => toggleSubtask(st.id)}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className={`flex-1 text-sm ${st.isCompleted ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                        {st.title}
+                      </span>
+                      <button type="button" onClick={() => removeSubtask(st.id)} className="text-gray-400 hover:text-red-500">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newSubtask}
+                    onChange={(e) => setNewSubtask(e.target.value)}
+                    onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())}
+                    className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                    placeholder="Anadir subtarea..."
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddSubtask}
+                    className="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-200"
+                  >
+                    <Plus size={18} />
+                    Anadir
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Notas Internas</label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
+                  rows={3}
+                  className="w-full resize-none rounded-lg border border-gray-300 bg-yellow-50 px-4 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                  placeholder="Notas privadas o comentarios..."
+                />
+              </div>
+            </form>
+          </div>
+
+          <div
+            className="z-10 border-t border-gray-200 bg-gray-50 px-4 py-4 md:rounded-b-xl md:px-6 md:py-6"
+            style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
+          >
+            <div className="flex items-center justify-between gap-3">
+              {task && onDelete ? (
                 <button
                   type="button"
-                  onClick={handleAddSubtask}
-                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors flex items-center gap-2"
+                  onClick={() => {
+                    if (window.confirm('Estas seguro de eliminar este trabajo?')) {
+                      onDelete(task.id);
+                      onClose();
+                    }
+                  }}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 md:px-4 md:text-base"
                 >
-                  <Plus size={18} />
-                  Añadir
+                  <Trash2 size={18} />
+                  <span className="hidden sm:inline">Eliminar</span>
+                </button>
+              ) : (
+                <div />
+              )}
+
+              <div className="flex gap-2 md:gap-3">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-lg px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 md:px-4 md:text-base"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  form="task-form"
+                  disabled={isSubmitting}
+                  className="whitespace-nowrap rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50 md:px-6 md:text-base"
+                >
+                  {isSubmitting ? 'Guardando...' : 'Guardar'}
                 </button>
               </div>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notas Internas</label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none bg-yellow-50"
-                placeholder="Notas privadas o comentarios..."
-              />
-            </div>
-          </form>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 md:p-6 border-t border-gray-200 flex items-center justify-between bg-gray-50 sticky bottom-0 md:rounded-b-xl z-10">
-          {task && onDelete ? (
-            <button
-              type="button"
-              onClick={() => {
-                if (window.confirm('¿Estás seguro de eliminar este trabajo?')) {
-                  onDelete(task.id);
-                  onClose();
-                }
-              }}
-              className="px-3 md:px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-colors flex items-center gap-2 text-sm md:text-base"
-            >
-              <Trash2 size={18} />
-              <span className="hidden sm:inline">Eliminar</span>
-            </button>
-          ) : (
-            <div></div>
-          )}
-          
-          <div className="flex gap-2 md:gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 md:px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-colors text-sm md:text-base"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              form="task-form"
-              disabled={isSubmitting}
-              className="px-4 md:px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 text-sm md:text-base whitespace-nowrap"
-            >
-              {isSubmitting ? 'Guardando...' : 'Guardar'}
-            </button>
           </div>
         </div>
       </div>
