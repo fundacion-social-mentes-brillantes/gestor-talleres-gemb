@@ -443,22 +443,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setOAuthFlag(latestContext);
 
-    if (latestContext.isIOS) {
-      try {
-        await signInWithRedirect(auth, googleProvider);
-        return;
-      } catch (error) {
-        const code = getFirebaseErrorCode(error);
-        setAuthErrorCode(code);
-        setAuthError(getAuthErrorMessage(code, latestContext));
-        setBrowserHelpText(getBrowserHelpText(latestContext));
-        console.error('Error logging in with iOS redirect:', error);
-        setIsLoggingIn(false);
-        clearOAuthFlag();
-        return;
-      }
-    }
-
     try {
       // Always try signInWithPopup first â€” avoids cross-domain redirect issues on mobile.
       // signInWithRedirect is used only as a fallback when popup is unavailable.
