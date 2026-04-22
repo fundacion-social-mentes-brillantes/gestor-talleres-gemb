@@ -187,7 +187,7 @@ export function TaskModal({ task, users, onClose, onSave, onDelete }: TaskModalP
                           alt={u.displayName}
                           className="h-5 w-5 rounded-full"
                         />
-                        {u.displayName.split(' ')[0]}
+                        {u.displayName}
                       </button>
                     ))}
                   </div>

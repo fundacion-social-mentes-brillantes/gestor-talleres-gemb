@@ -3,7 +3,15 @@ import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-const app = initializeApp(firebaseConfig);
+const resolvedFirebaseConfig = {
+  ...firebaseConfig,
+  authDomain:
+    typeof window !== 'undefined' && window.location.hostname.endsWith('.vercel.app')
+      ? window.location.hostname
+      : firebaseConfig.authDomain,
+};
+
+const app = initializeApp(resolvedFirebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const googleProvider = new GoogleAuthProvider();
