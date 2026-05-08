@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertCircle, Bug, Copy, ExternalLink, Info, LayoutDashboard } from 'lucide-react';
+import { AlertCircle, Copy, ExternalLink, Flame, Info, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export function Login() {
@@ -15,25 +15,13 @@ export function Login() {
     copyCurrentLink,
     isIOS,
     isAndroid,
-    debugLog,
   } = useAuth();
 
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
-  const [showDebug, setShowDebug] = useState(false);
-  const [tapCount, setTapCount] = useState(0);
 
   const handleCopyLink = async () => {
     const copied = await copyCurrentLink();
     setCopyFeedback(copied ? 'Enlace copiado.' : 'No se pudo copiar el enlace.');
-  };
-
-  // Tap logo 5 times to reveal debug panel
-  const handleLogoTap = () => {
-    setTapCount((n) => {
-      const next = n + 1;
-      if (next >= 5) { setShowDebug(true); return 0; }
-      return next;
-    });
   };
 
   const platformTitle = isIOS
@@ -51,57 +39,47 @@ export function Login() {
   const ctaLabel = isAndroid ? 'Abrir en Chrome' : isIOS ? 'Abrir en Safari' : 'Abrir en navegador compatible';
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <div
-            role="button"
-            tabIndex={0}
-            aria-label="Logo"
-            onClick={handleLogoTap}
-            onKeyDown={(e) => e.key === 'Enter' && handleLogoTap()}
-            className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg cursor-pointer select-none"
-          >
-            <LayoutDashboard size={32} className="text-white" />
+    <div className="min-h-screen bg-slate-950 text-white">
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top,#f9731633,transparent_36%),radial-gradient(circle_at_bottom_right,#22d3ee22,transparent_32%)]" />
+      <div className="relative flex min-h-screen items-center justify-center px-4 py-10">
+        <div className="w-full max-w-md rounded-[2rem] border border-white/10 bg-slate-900/80 p-6 shadow-2xl shadow-black/30 backdrop-blur sm:p-8">
+          <div className="mb-6 text-center">
+            <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-amber-300 via-orange-500 to-red-500 text-white shadow-lg shadow-orange-500/30">
+              <Flame size={38} />
+            </div>
+            <p className="text-xs font-black uppercase tracking-[0.25em] text-orange-300">Gimnasio Emocional</p>
+            <h1 className="mt-2 text-3xl font-black leading-tight text-white">Gestor de Talleres GEMB</h1>
+            <p className="mt-3 text-sm leading-6 text-slate-400">
+              Administra talleres, asistentes, pagos, asistencia y orden de llegada con Firebase.
+            </p>
           </div>
-        </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          Centro de Control
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Gestiona tus trabajos y tareas pendientes
-        </p>
-      </div>
-
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-xl sm:px-10 border border-gray-100">
 
           {authError && (
-            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="mb-4 rounded-2xl border border-red-400/30 bg-red-950/50 px-4 py-3 text-sm text-red-100">
               <div className="flex items-start gap-2">
-                <AlertCircle size={18} className="mt-0.5 shrink-0" />
+                <AlertCircle size={18} className="mt-0.5 shrink-0 text-red-300" />
                 <div>
-                  <p className="font-medium">No se pudo iniciar sesion</p>
-                  <p>{authError}</p>
-                  {authErrorCode && <p className="mt-1 font-mono text-xs opacity-70">{authErrorCode}</p>}
+                  <p className="font-black">No se pudo iniciar sesión</p>
+                  <p className="mt-1 text-red-100/90">{authError}</p>
+                  {authErrorCode && <p className="mt-2 font-mono text-xs text-red-200/70">{authErrorCode}</p>}
                 </div>
               </div>
             </div>
           )}
 
           {authNotice && (
-            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <div className="mb-4 rounded-2xl border border-amber-300/30 bg-amber-950/40 px-4 py-3 text-sm text-amber-100">
               <div className="flex items-start gap-2">
-                <Info size={18} className="mt-0.5 shrink-0" />
+                <Info size={18} className="mt-0.5 shrink-0 text-amber-200" />
                 <p>{authNotice}</p>
               </div>
             </div>
           )}
 
           {browserHelpText && (
-            <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-              <p className="font-medium">{platformTitle}</p>
-              <p className="mt-1">{browserHelpText}</p>
+            <div className="mb-4 rounded-2xl border border-cyan-300/30 bg-cyan-950/30 px-4 py-3 text-sm text-cyan-100">
+              <p className="font-black">{platformTitle}</p>
+              <p className="mt-1 text-cyan-100/90">{browserHelpText}</p>
             </div>
           )}
 
@@ -109,9 +87,10 @@ export function Login() {
             id="login-btn"
             onClick={login}
             disabled={isLoggingIn}
-            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-orange-500/25 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:bg-orange-500/50"
           >
-            {isLoggingIn ? 'Preparando inicio de sesion...' : 'Iniciar sesion con Google'}
+            <ShieldCheck size={18} />
+            {isLoggingIn ? 'Preparando inicio de sesión...' : 'Iniciar sesión con Google'}
           </button>
 
           {shouldSuggestExternalBrowser && (
@@ -120,7 +99,7 @@ export function Login() {
                 type="button"
                 id="open-browser-btn"
                 onClick={openInCompatibleBrowser}
-                className="mt-3 w-full flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 px-4 py-3 text-sm font-black text-slate-200 transition hover:bg-white/5"
               >
                 <ExternalLink size={16} />
                 {ctaLabel}
@@ -130,57 +109,17 @@ export function Login() {
                 type="button"
                 id="copy-link-btn"
                 onClick={handleCopyLink}
-                className="mt-3 w-full flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 px-4 py-3 text-sm font-black text-slate-200 transition hover:bg-white/5"
               >
                 <Copy size={16} />
                 Copiar enlace
               </button>
 
-              {copyFeedback && (
-                <p className="mt-2 text-center text-xs text-gray-500">{copyFeedback}</p>
-              )}
+              {copyFeedback && <p className="mt-2 text-center text-xs text-slate-400">{copyFeedback}</p>}
             </>
           )}
 
-          <p className="mt-3 text-center text-xs text-gray-500">{platformNote}</p>
-
-          {/* Debug toggle button */}
-          <div className="mt-4 flex justify-center">
-            <button
-              type="button"
-              onClick={() => setShowDebug((v) => !v)}
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
-              aria-label="Mostrar diagnóstico"
-            >
-              <Bug size={12} />
-              {showDebug ? 'Ocultar diagnóstico' : 'Ver diagnóstico'}
-            </button>
-          </div>
-
-          {/* Debug panel */}
-          {showDebug && (
-            <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
-              <p className="text-xs font-semibold text-gray-600 mb-2">
-                Log de autenticacion (copia esto si hay error)
-              </p>
-              <div className="max-h-48 overflow-y-auto space-y-0.5">
-                {debugLog.length === 0 ? (
-                  <p className="text-xs text-gray-400 italic">Sin eventos aun. Intenta iniciar sesion.</p>
-                ) : (
-                  debugLog.map((line, i) => (
-                    <p key={i} className="text-xs font-mono text-gray-700 break-all leading-4">{line}</p>
-                  ))
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => navigator.clipboard?.writeText(debugLog.join('\n'))}
-                className="mt-2 text-xs text-blue-600 hover:underline"
-              >
-                Copiar log completo
-              </button>
-            </div>
-          )}
+          <p className="mt-5 text-center text-xs leading-5 text-slate-500">{platformNote}</p>
         </div>
       </div>
     </div>
