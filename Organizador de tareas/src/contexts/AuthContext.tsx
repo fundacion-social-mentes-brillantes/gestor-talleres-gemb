@@ -24,7 +24,6 @@ interface BrowserContextInfo {
   isAndroid: boolean;
   isBrave: boolean;
   isEmbedded: boolean;
-  /** Brave on any mobile platform â€” should NOT attempt redirect auth */
   isBraveMobile: boolean;
   browserName: string;
   recommendedBrowser: string;
@@ -103,24 +102,15 @@ function readOAuthFlag() {
         continue;
       }
 
-      return {
-        inProgress,
-        rawContext,
-        startedAt: startedAtMs,
-      };
+      return { inProgress, rawContext, startedAt: startedAtMs };
     }
   }
 
-  return {
-    inProgress: false,
-    rawContext: null,
-    startedAt: null,
-  };
+  return { inProgress: false, rawContext: null, startedAt: null };
 }
 
 function parseStoredContext(rawContext: string | null): BrowserContextInfo | null {
   if (!rawContext) return null;
-
   try {
     return JSON.parse(rawContext) as BrowserContextInfo;
   } catch {
@@ -134,15 +124,13 @@ function detectBrowserContext(): BrowserContextInfo {
   const isIOS = /iPhone|iPad|iPod/i.test(userAgent);
   const isAndroid = /android/i.test(userAgent);
   const isMobile = /android|iphone|ipad|ipod|mobile/i.test(userAgent);
-  const isBrave = /Brave/i.test(userAgent)
-    || (typeof navigator !== 'undefined' && 'brave' in navigator);
+  const isBrave = /Brave/i.test(userAgent) || (typeof navigator !== 'undefined' && 'brave' in navigator);
   const isWhatsApp = /WhatsApp/i.test(userAgent);
   const isInstagram = /Instagram/i.test(userAgent);
   const isFacebook = /FBAN|FBAV|FB_IAB|FB4A/i.test(userAgent);
   const isLine = /Line/i.test(userAgent);
   const isTelegram = /Telegram/i.test(userAgent);
   const isEmbedded = isWhatsApp || isInstagram || isFacebook || isLine || isTelegram;
-  // Brave on any mobile device cannot complete Firebase redirect reliably
   const isBraveMobile = isBrave && isMobile;
 
   let browserName = 'este navegador';
@@ -151,16 +139,7 @@ function detectBrowserContext(): BrowserContextInfo {
   else if (/Safari/i.test(userAgent) && /Apple/i.test(vendor)) browserName = 'Safari';
   else if (/Chrome/i.test(userAgent) && !/Chromium/i.test(userAgent)) browserName = 'Chrome';
 
-  return {
-    isMobile,
-    isIOS,
-    isAndroid,
-    isBrave,
-    isBraveMobile,
-    isEmbedded,
-    browserName,
-    recommendedBrowser: isIOS ? 'Safari' : 'Chrome',
-  };
+  return { isMobile, isIOS, isAndroid, isBrave, isBraveMobile, isEmbedded, browserName, recommendedBrowser: isIOS ? 'Safari' : 'Chrome' };
 }
 
 function getBrowserHelpText(browserContext: BrowserContextInfo) {
@@ -176,16 +155,14 @@ function getBrowserHelpText(browserContext: BrowserContextInfo) {
 }
 
 function getFirebaseErrorCode(error: unknown) {
-  if (typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string') {
-    return error.code;
-  }
+  if (typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string') return error.code;
   return null;
 }
 
 function getAuthErrorMessage(code: string | null, browserContext?: BrowserContextInfo | null) {
   switch (code) {
     case 'auth/unauthorized-domain':
-      return 'Este dominio no esta autorizado en Firebase Auth. Agrega gestor-tareas-ia.vercel.app en Authentication > Settings > Authorized domains.';
+      return 'Este dominio no esta autorizado en Firebase Auth. Agrega gestor-talleres-gemb.vercel.app en Authentication > Settings > Authorized domains.';
     case 'auth/popup-blocked':
       return 'El navegador bloqueo la ventana emergente. Intentaremos continuar con redireccion.';
     case 'auth/popup-closed-by-user':
@@ -238,9 +215,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let redirectChecked = false;
 
     const updateLoading = () => {
-      if (isActive && authStateKnown && redirectChecked) {
-        setLoading(false);
-      }
+      if (isActive && authStateKnown && redirectChecked) setLoading(false);
     };
 
     const pendingOAuth = readOAuthFlag();
@@ -251,7 +226,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setBrowserHelpText(getBrowserHelpText(browserContext));
       setAuthNotice(`Estas abriendo la app dentro de un navegador embebido. Para iniciar sesion usa ${browserContext.recommendedBrowser}.`);
     } else if (browserContext.isBraveMobile) {
-      // Brave mobile (iOS or Android) cannot complete Firebase redirect auth reliably
       setShouldSuggestExternalBrowser(true);
       setBrowserHelpText(getBrowserHelpText(browserContext));
       setAuthNotice(`Brave en celular no es compatible con el inicio de sesion. Abre la app en ${browserContext.recommendedBrowser} para continuar.`);
@@ -314,17 +288,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const redirectResult = await getRedirectResult(auth);
         if (!isActive) return;
-
         redirectChecked = true;
 
         if (redirectResult?.user) {
           clearOAuthFlag();
         } else if (pendingOAuth.inProgress && !auth.currentUser) {
           const contextForMessage = pendingBrowserContext || browserContext;
-          const code = browserContext.isEmbedded || contextForMessage?.isEmbedded
-            ? 'auth/embedded-browser-blocked'
-            : 'auth/redirect-not-completed';
-
+          const code = browserContext.isEmbedded || contextForMessage?.isEmbedded ? 'auth/embedded-browser-blocked' : 'auth/redirect-not-completed';
           setAuthErrorCode(code);
           setAuthError(getAuthErrorMessage(code, contextForMessage));
           setBrowserHelpText(getBrowserHelpText(contextForMessage));
@@ -369,25 +339,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const openInCompatibleBrowser = () => {
     if (typeof window === 'undefined') return;
-
     if (typeof navigator !== 'undefined' && 'share' in navigator && browserContext.isMobile) {
       navigator.share({ url: window.location.href, title: document.title }).catch(() => {});
       return;
     }
-
     window.open(window.location.href, '_blank', 'noopener,noreferrer');
   };
 
   const copyCurrentLink = async () => {
-    if (typeof window === 'undefined' || typeof navigator === 'undefined' || !navigator.clipboard) {
-      return false;
-    }
-
+    if (typeof window === 'undefined' || typeof navigator === 'undefined' || !navigator.clipboard) return false;
     try {
       await navigator.clipboard.writeText(window.location.href);
-      setAuthNotice(browserContext.isIOS
-        ? 'Enlace copiado. Ahora abre Safari y pega el enlace para iniciar sesion.'
-        : `Enlace copiado. Abrelo en ${browserContext.recommendedBrowser}.`);
+      setAuthNotice(browserContext.isIOS ? 'Enlace copiado. Ahora abre Safari y pega el enlace para iniciar sesion.' : `Enlace copiado. Abrelo en ${browserContext.recommendedBrowser}.`);
       return true;
     } catch {
       return false;
@@ -398,10 +361,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAuthError(null);
     setAuthErrorCode(null);
     setIsLoggingIn(true);
-
     const latestContext = detectBrowserContext();
 
-    // Hard block: embedded browsers (WhatsApp, Instagram, etc.)
     if (latestContext.isEmbedded) {
       setOAuthFlag(latestContext);
       setAuthErrorCode('auth/embedded-browser-blocked');
@@ -412,12 +373,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Hard block: Brave on any mobile â€” redirect auth never completes reliably
     if (latestContext.isBraveMobile) {
       setAuthErrorCode('auth/embedded-browser-blocked');
-      setAuthError(
-        `Brave en celular no es compatible con el inicio de sesion de Google. Abre este enlace en ${latestContext.recommendedBrowser}.`
-      );
+      setAuthError(`Brave en celular no es compatible con el inicio de sesion de Google. Abre este enlace en ${latestContext.recommendedBrowser}.`);
       setBrowserHelpText(getBrowserHelpText(latestContext));
       setShouldSuggestExternalBrowser(true);
       setIsLoggingIn(false);
@@ -425,7 +383,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const persistenceResult = await configurePersistence();
-
     if (persistenceResult.mode === 'none') {
       setAuthErrorCode('auth/persistence-unavailable');
       setAuthError(getAuthErrorMessage('auth/persistence-unavailable', latestContext));
@@ -435,25 +392,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (persistenceResult.mode === 'session') {
-      setAuthNotice('La sesion se guardara solo durante esta pestana para maximizar compatibilidad en este navegador.');
-    } else {
-      setAuthNotice(null);
-    }
-
+    setAuthNotice(persistenceResult.mode === 'session' ? 'La sesion se guardara solo durante esta pestana para maximizar compatibilidad en este navegador.' : null);
     setOAuthFlag(latestContext);
 
     try {
-      // Always try signInWithPopup first â€” avoids cross-domain redirect issues on mobile.
-      // signInWithRedirect is used only as a fallback when popup is unavailable.
       await signInWithPopup(auth, googleProvider);
       clearOAuthFlag();
     } catch (error) {
       const code = getFirebaseErrorCode(error);
-      const shouldFallbackToRedirect =
-        code === 'auth/popup-blocked' ||
-        code === 'auth/popup-closed-by-user' ||
-        code === 'auth/operation-not-supported-in-this-environment';
+      const shouldFallbackToRedirect = code === 'auth/popup-blocked' || code === 'auth/popup-closed-by-user' || code === 'auth/operation-not-supported-in-this-environment';
 
       if (shouldFallbackToRedirect) {
         try {
@@ -493,25 +440,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        authError,
-        authErrorCode,
-        authNotice,
-        browserHelpText,
-        isLoggingIn,
-        isEmbeddedBrowser: browserContext.isEmbedded,
-        isIOS: browserContext.isIOS,
-        isAndroid: browserContext.isAndroid,
-        shouldSuggestExternalBrowser,
-        openInCompatibleBrowser,
-        copyCurrentLink,
-        login,
-        logout,
-      }}
-    >
+    <AuthContext.Provider value={{ user, loading, authError, authErrorCode, authNotice, browserHelpText, isLoggingIn, isEmbeddedBrowser: browserContext.isEmbedded, isIOS: browserContext.isIOS, isAndroid: browserContext.isAndroid, shouldSuggestExternalBrowser, openInCompatibleBrowser, copyCurrentLink, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
@@ -519,8 +448,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
