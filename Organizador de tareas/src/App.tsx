@@ -36,6 +36,7 @@ import autoTable from 'jspdf-autotable';
 
 type Workshop = {
   id: string;
+  kind: 'gemb_workshop';
   name: string;
   isArchived: boolean;
   createdAt?: string;
@@ -44,6 +45,7 @@ type Workshop = {
 
 type Attendee = {
   id: string;
+  kind: 'gemb_attendee';
   workshopId: string;
   name: string;
   paid: boolean;
@@ -54,11 +56,36 @@ type Attendee = {
   updatedAt?: string;
 };
 
+type GembRecord = Workshop | Attendee;
+
+const RECORDS_COLLECTION = 'tasks';
 const money = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
 const nowIso = () => new Date().toISOString();
 const cleanName = (value: string) => value.trim().replace(/\s+/g, ' ').toUpperCase();
 const normalize = (value: string) => cleanName(value).toLowerCase();
 const getTime = (value: number | null) => value ? new Date(value).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+
+function legacyTaskShape(title: string, userId?: string | null) {
+  const now = nowIso();
+  return {
+    title,
+    description: '',
+    status: 'pending',
+    priority: 'medium',
+    createdBy: userId || '',
+    assignees: userId ? [userId] : [],
+    dueDate: null,
+    category: 'Talleres GEMB',
+    tags: ['gemb', 'talleres'],
+    subtasks: [],
+    notes: '',
+    links: [],
+    progress: 0,
+    createdAt: now,
+    updatedAt: now,
+    serverCreatedAt: serverTimestamp(),
+  };
+}
 
 function FireMark({ className = 'h-8 w-8' }: { className?: string }) {
   return <Flame className={className} />;
@@ -103,11 +130,12 @@ function AppContent() {
     }
 
     setLoadingData(true);
-    const unsubscribeWorkshops = onSnapshot(
-      query(collection(db, 'workshops'), orderBy('createdAt', 'desc')),
+    const unsubscribe = onSnapshot(
+      query(collection(db, RECORDS_COLLECTION), orderBy('createdAt', 'desc')),
       (snapshot) => {
-        const rows = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })) as Workshop[];
-        setWorkshops(rows);
+        const rows = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })) as GembRecord[];
+        setWorkshops(rows.filter((item): item is Workshop => item.kind === 'gemb_workshop'));
+        setAttendees(rows.filter((item): item is Attendee => item.kind === 'gemb_attendee'));
         setLoadingData(false);
         setError(null);
       },
@@ -117,19 +145,7 @@ function AppContent() {
       },
     );
 
-    const unsubscribeAttendees = onSnapshot(
-      query(collection(db, 'attendees'), orderBy('createdAt', 'desc')),
-      (snapshot) => {
-        setAttendees(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })) as Attendee[]);
-        setError(null);
-      },
-      (err) => setError(err.message),
-    );
-
-    return () => {
-      unsubscribeWorkshops();
-      unsubscribeAttendees();
-    };
+    return () => unsubscribe();
   }, [user]);
 
   const activeWorkshop = useMemo(() => workshops.find((w) => w.id === activeWorkshopId) || null, [workshops, activeWorkshopId]);
@@ -172,13 +188,11 @@ function AppContent() {
   const createWorkshop = async () => {
     const name = cleanName(newWorkshopName);
     if (!name) return;
-    const ref = await addDoc(collection(db, 'workshops'), {
+    const ref = await addDoc(collection(db, RECORDS_COLLECTION), {
+      ...legacyTaskShape(`TALLER: ${name}`, user?.uid),
+      kind: 'gemb_workshop',
       name,
       isArchived: false,
-      createdAt: nowIso(),
-      updatedAt: nowIso(),
-      createdBy: user?.uid || null,
-      serverCreatedAt: serverTimestamp(),
     });
     setNewWorkshopName('');
     setActiveWorkshopId(ref.id);
@@ -186,14 +200,15 @@ function AppContent() {
   };
 
   const updateWorkshop = async (id: string, updates: Partial<Workshop>) => {
-    await updateDoc(doc(db, 'workshops', id), { ...updates, updatedAt: nowIso() });
+    const title = updates.name ? `TALLER: ${updates.name}` : undefined;
+    await updateDoc(doc(db, RECORDS_COLLECTION, id), { ...updates, ...(title ? { title } : {}), updatedAt: nowIso() });
   };
 
   const deleteWorkshop = async (workshop: Workshop) => {
     if (!window.confirm(`¿Eliminar definitivamente "${workshop.name}" y sus asistentes?`)) return;
     const batch = writeBatch(db);
-    attendees.filter((a) => a.workshopId === workshop.id).forEach((a) => batch.delete(doc(db, 'attendees', a.id)));
-    batch.delete(doc(db, 'workshops', workshop.id));
+    attendees.filter((a) => a.workshopId === workshop.id).forEach((a) => batch.delete(doc(db, RECORDS_COLLECTION, a.id)));
+    batch.delete(doc(db, RECORDS_COLLECTION, workshop.id));
     await batch.commit();
     if (activeWorkshopId === workshop.id) {
       setActiveWorkshopId(null);
@@ -203,21 +218,21 @@ function AppContent() {
 
   const addAttendee = async () => {
     if (!activeWorkshop) return;
-    await addDoc(collection(db, 'attendees'), {
+    await addDoc(collection(db, RECORDS_COLLECTION), {
+      ...legacyTaskShape('ASISTENTE: NUEVO ASISTENTE', user?.uid),
+      kind: 'gemb_attendee',
       workshopId: activeWorkshop.id,
       name: 'NUEVO ASISTENTE',
       paid: false,
       amount: 0,
       attended: false,
       checkInTime: null,
-      createdAt: nowIso(),
-      updatedAt: nowIso(),
-      createdBy: user?.uid || null,
     });
   };
 
   const updateAttendee = async (id: string, updates: Partial<Attendee>) => {
-    await updateDoc(doc(db, 'attendees', id), { ...updates, updatedAt: nowIso() });
+    const title = updates.name ? `ASISTENTE: ${updates.name}` : undefined;
+    await updateDoc(doc(db, RECORDS_COLLECTION, id), { ...updates, ...(title ? { title } : {}), updatedAt: nowIso() });
   };
 
   const saveAttendeeName = async (attendee: Attendee) => {
@@ -235,13 +250,13 @@ function AppContent() {
 
   const deleteAttendee = async (attendee: Attendee) => {
     if (!window.confirm(`¿Eliminar a "${attendee.name}"?`)) return;
-    await deleteDoc(doc(db, 'attendees', attendee.id));
+    await deleteDoc(doc(db, RECORDS_COLLECTION, attendee.id));
   };
 
   const clearActiveList = async () => {
     if (!activeWorkshop || !window.confirm('¿Vaciar todos los asistentes de este taller?')) return;
     const batch = writeBatch(db);
-    activeAttendees.forEach((a) => batch.delete(doc(db, 'attendees', a.id)));
+    activeAttendees.forEach((a) => batch.delete(doc(db, RECORDS_COLLECTION, a.id)));
     await batch.commit();
   };
 
@@ -272,17 +287,16 @@ function AppContent() {
         return;
       }
       existing.add(normalize(name));
-      const ref = doc(collection(db, 'attendees'));
+      const ref = doc(collection(db, RECORDS_COLLECTION));
       batch.set(ref, {
+        ...legacyTaskShape(`ASISTENTE: ${name}`, user?.uid),
+        kind: 'gemb_attendee',
         workshopId: activeWorkshop.id,
         name,
         paid: false,
         amount: 0,
         attended: false,
         checkInTime: null,
-        createdAt: nowIso(),
-        updatedAt: nowIso(),
-        createdBy: user?.uid || null,
       });
       added += 1;
     });
@@ -386,7 +400,7 @@ function AppContent() {
             <div>
               <p className="text-xs font-black uppercase tracking-[0.24em] text-orange-300">Gestor interno</p>
               <h2 className="text-2xl font-black text-white sm:text-3xl">{view === 'workshop' && activeWorkshop ? activeWorkshop.name : view === 'arrival' ? 'Orden de llegada' : 'Panel general de talleres'}</h2>
-              <p className="mt-1 text-sm text-slate-400">Conserva el login actual y guarda la información en Firebase Firestore.</p>
+              <p className="mt-1 text-sm text-slate-400">Usa el login actual y guarda la información en la colección autorizada de Firebase.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               {activeWorkshop && view === 'workshop' && <button onClick={exportPDF} className="flex items-center gap-2 rounded-2xl bg-orange-500 px-4 py-2 text-sm font-black text-white hover:bg-orange-400"><Download size={16} /> PDF</button>}
