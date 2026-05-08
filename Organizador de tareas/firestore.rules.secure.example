@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function allowedUser() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return allowedUser()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function baseRecord(data) {
+      return data.keys().hasAll(['title', 'status', 'priority', 'createdBy', 'createdAt', 'updatedAt', 'kind'])
+        && data.createdBy == request.auth.uid;
+    }
+
+    function isWorkshop(data) {
+      return data.kind == 'gemb_workshop'
+        && data.name is string
+        && data.name.size() >= 2
+        && data.name.size() <= 140
+        && data.isArchived is bool;
+    }
+
+    function isAttendee(data) {
+      return data.kind == 'gemb_attendee'
+        && data.workshopId is string
+        && data.name is string
+        && data.name.size() >= 2
+        && data.name.size() <= 140
+        && data.paid is bool
+        && data.amount is number
+        && data.amount >= 0
+        && data.amount <= 50000000
+        && data.attended is bool;
+    }
+
+    match /users/{userId} {
+      allow read: if allowedUser();
+      allow create: if allowedUser() && request.auth.uid == userId;
+      allow update: if allowedUser() && request.auth.uid == userId;
+      allow delete: if isAdmin();
+    }
+
+    match /tasks/{taskId} {
+      allow read: if allowedUser();
+      allow create: if allowedUser() && baseRecord(request.resource.data) && (isWorkshop(request.resource.data) || isAttendee(request.resource.data));
+      allow update: if allowedUser()
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.kind == resource.data.kind
+        && (isWorkshop(request.resource.data) || isAttendee(request.resource.data));
+      allow delete: if isAdmin();
+    }
+  }
+}
