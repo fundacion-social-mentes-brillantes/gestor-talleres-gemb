@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import AppSecure from './AppSecure';
 import { auth, db } from './lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { addDoc, collection, doc, getDocs, onSnapshot, query, serverTimestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { CheckCircle2, Clock3, Search, ShieldCheck, UserCheck, Users, X } from 'lucide-react';
 import { GlassPanel } from './components/ui/GlassPanel';
@@ -367,11 +368,26 @@ export default function AppOperationalFix() {
   const [attendees, setAttendees] = useState<AttendeeRow[]>([]);
 
   useEffect(() => {
-    return onSnapshot(query(collection(db, RECORDS_COLLECTION), where('kind', 'in', ['gemb_workshop', 'gemb_attendee'])), (snapshot) => {
-      const rows = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
-      setWorkshops(rows.filter((item) => item.kind === 'gemb_workshop') as WorkshopRow[]);
-      setAttendees(rows.filter((item) => item.kind === 'gemb_attendee') as AttendeeRow[]);
+    let unsubscribeRecords: (() => void) | undefined;
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      unsubscribeRecords?.();
+      if (!user) {
+        setWorkshops([]);
+        setAttendees([]);
+        return;
+      }
+
+      unsubscribeRecords = onSnapshot(query(collection(db, RECORDS_COLLECTION), where('kind', 'in', ['gemb_workshop', 'gemb_attendee'])), (snapshot) => {
+        const rows = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+        setWorkshops(rows.filter((item) => item.kind === 'gemb_workshop') as WorkshopRow[]);
+        setAttendees(rows.filter((item) => item.kind === 'gemb_attendee') as AttendeeRow[]);
+      });
     });
+
+    return () => {
+      unsubscribeRecords?.();
+      unsubscribeAuth();
+    };
   }, []);
 
   useEffect(() => {

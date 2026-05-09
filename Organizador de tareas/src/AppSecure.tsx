@@ -220,6 +220,17 @@ function legacyTaskShape(title: string, userId?: string | null) {
   };
 }
 
+async function loadImageDataUrl(src: string) {
+  const response = await fetch(src);
+  const blob = await response.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 function AppContent() {
   const { user, loading, logout } = useAuth();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -530,6 +541,7 @@ function AppContent() {
       async () => {
         const [{ jsPDF }, autoTableModule] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
         const autoTable = autoTableModule.default;
+        const logoDataUrl = await loadImageDataUrl('/logo-gemb-symbol.png').catch(() => null);
         const targets = activeWorkshop ? [activeWorkshop] : activeWorkshops;
         const pdf = new jsPDF();
         targets.forEach((workshop, index) => {
@@ -541,26 +553,58 @@ function AppContent() {
 
           pdf.setFillColor(3, 5, 11);
           pdf.rect(0, 0, 210, 297, 'F');
-          pdf.setFillColor(166, 97, 7);
-          pdf.roundedRect(14, 14, 182, 34, 4, 4, 'F');
+
+          pdf.setDrawColor(205, 153, 56);
+          pdf.setFillColor(12, 16, 27);
+          pdf.roundedRect(12, 12, 186, 42, 4, 4, 'FD');
+          if (logoDataUrl) pdf.addImage(logoDataUrl, 'PNG', 16, 17, 34, 20);
           pdf.setTextColor(255, 247, 237);
           pdf.setFont('helvetica', 'bold');
-          pdf.setFontSize(16);
-          pdf.text('GIMNASIO EMOCIONAL MENTES BRILLANTES', 105, 28, { align: 'center' });
+          pdf.setFontSize(14);
+          pdf.text('GIMNASIO EMOCIONAL MENTES BRILLANTES', logoDataUrl ? 54 : 18, 27);
           pdf.setFontSize(10);
-          pdf.text('REPORTE DE TALLERES Y ASISTENCIA', 105, 39, { align: 'center' });
-          pdf.setFontSize(15);
-          pdf.text(workshop.name, 14, 64);
-          pdf.setFontSize(9);
-          pdf.text(`Generado: ${new Date().toLocaleString('es-CO')}`, 14, 74);
-          pdf.text(`Registrados: ${rows.length}   Asistieron: ${present}   Pagaron: ${paid.length}   Recaudado: ${money.format(total)}`, 14, 84);
+          pdf.setTextColor(246, 214, 125);
+          pdf.text('REPORTE DE TALLERES Y ASISTENCIA', logoDataUrl ? 54 : 18, 36);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(8);
+          pdf.setTextColor(203, 213, 225);
+          pdf.text(`Generado: ${new Date().toLocaleString('es-CO')}`, logoDataUrl ? 54 : 18, 44);
+
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(16);
+          pdf.setTextColor(255, 255, 255);
+          pdf.text(workshop.name, 14, 68);
+
+          const metrics = [
+            ['Registrados', String(rows.length)],
+            ['Asistieron', String(present)],
+            ['Pagaron', String(paid.length)],
+            ['Recaudado', money.format(total)],
+          ];
+          metrics.forEach(([label, value], metricIndex) => {
+            const x = 14 + metricIndex * 46;
+            pdf.setDrawColor(101, 76, 28);
+            pdf.setFillColor(18, 24, 38);
+            pdf.roundedRect(x, 78, 42, 20, 3, 3, 'FD');
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(7);
+            pdf.setTextColor(203, 213, 225);
+            pdf.text(label, x + 3, 85);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(metricIndex === 3 ? 9 : 13);
+            pdf.setTextColor(246, 214, 125);
+            pdf.text(value, x + 3, 94);
+          });
 
           autoTable(pdf, {
-            startY: 96,
+            startY: 108,
             head: [['Participante', 'Contacto', 'Asistencia', 'Hora', 'Pago', 'Valor']],
             body: rows.map((attendee) => [attendee.name, [attendee.phone, attendee.email].filter(Boolean).join(' | '), attendee.attended ? 'SI' : 'NO', getTime(attendee.checkInTime), attendee.paid ? 'PAGADO' : 'PENDIENTE', money.format(Number(attendee.amount || 0))]),
-            styles: { fontSize: 7, cellPadding: 2 },
-            headStyles: { fillColor: [166, 97, 7], textColor: [255, 255, 255], fontStyle: 'bold' },
+            styles: { fontSize: 7, cellPadding: 2.2, lineColor: [224, 214, 190], lineWidth: 0.1, textColor: [18, 24, 38] },
+            headStyles: { fillColor: [166, 97, 7], textColor: [255, 247, 237], fontStyle: 'bold' },
+            bodyStyles: { fillColor: [255, 252, 244] },
+            alternateRowStyles: { fillColor: [247, 241, 229] },
+            margin: { left: 14, right: 14 },
           });
           const pageCount = pdf.getNumberOfPages();
           for (let page = 1; page <= pageCount; page += 1) {
