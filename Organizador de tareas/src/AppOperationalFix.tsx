@@ -2,7 +2,18 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import AppSecure from './AppSecure';
 import { auth, db } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { addDoc, collection, doc, getDocs, onSnapshot, query, serverTimestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
+import {
+  addDoc,
+  collection,
+  doc,
+  getDocs,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+  writeBatch,
+} from 'firebase/firestore';
 import { CheckCircle2, Clock3, Search, ShieldCheck, UserCheck, Users, X } from 'lucide-react';
 import { GlassPanel } from './components/ui/GlassPanel';
 import { Logo } from './components/ui/Logo';
@@ -29,7 +40,6 @@ type AttendeeRow = {
   registrationSource?: string;
 };
 type ImportRow = { name: string; email: string; phone: string; documentId: string; notes: string };
-
 type ColumnMap = { name: number; email: number; phone: number; document: number; ignored: Set<number> };
 
 const nowIso = () => new Date().toISOString();
@@ -42,6 +52,7 @@ const digits = (value: unknown) => clean(value).replace(/\D/g, '');
 const looksPhone = (value: unknown) => digits(value).length >= 7 && digits(value).length <= 15;
 const looksDocument = (value: unknown) => digits(value).length >= 5 && digits(value).length <= 13;
 const timeText = (value?: number | null) => value ? new Date(value).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+const parseMoneyInput = (value: string) => Math.min(Number(value.replace(/[^0-9]/g, '') || 0), 50000000);
 
 function chunk<T>(items: T[], size = BATCH_LIMIT) {
   const out: T[][] = [];
@@ -263,12 +274,25 @@ async function importSmartCsv(file: File, workshopName: string) {
         amount: 0,
         attended: false,
         checkInTime: null,
-        registrationSource: 'google-forms-csv-smart-v3',
+        registrationSource: 'google-forms-csv-smart-v4',
       });
     });
     await batch.commit();
   }
   return `Importación lista. Agregados: ${imported.length}. Duplicados: ${duplicates}. Inválidos: ${invalid}. Pagos pendientes y valor 0.`;
+}
+
+function findAttendeeForAmountInput(input: HTMLInputElement, attendees: AttendeeRow[]) {
+  let node: HTMLElement | null = input;
+  let depth = 0;
+  while (node && depth < 9) {
+    const text = norm(node.textContent || '');
+    const attendee = attendees.find((item) => text.includes(norm(item.name)));
+    if (attendee) return attendee;
+    node = node.parentElement;
+    depth += 1;
+  }
+  return null;
 }
 
 function ArrivalModal({ open, onClose, rows, workshops }: { open: boolean; onClose: () => void; rows: AttendeeRow[]; workshops: WorkshopRow[] }) {
@@ -312,9 +336,9 @@ function ArrivalModal({ open, onClose, rows, workshops }: { open: boolean; onClo
                 <Logo variant="symbol" className="h-20 w-28" />
               </div>
               <div>
-              <p className="text-sm font-black uppercase text-cyan-100">Modo portería</p>
-              <h2 className="mt-2 text-3xl font-black">Orden de llegada real</h2>
-              <p className="mt-1 text-sm text-slate-300">Busca asistentes, marca entrada en vivo y conserva el orden por hora.</p>
+                <p className="text-sm font-black uppercase text-cyan-100">Modo portería</p>
+                <h2 className="mt-2 text-3xl font-black">Orden de llegada real</h2>
+                <p className="mt-1 text-sm text-slate-300">Busca asistentes, marca entrada en vivo y conserva el orden por hora.</p>
               </div>
             </div>
             <PremiumButton onClick={onClose} icon={<X size={17} />} variant="ghost" size="lg">Cerrar</PremiumButton>
@@ -391,19 +415,58 @@ export default function AppOperationalFix() {
   }, []);
 
   useEffect(() => {
-    const wrong = attendees.filter((item) => Number(item.amount || 0) !== 0);
-    if (!wrong.length) return;
-    const run = async () => {
-      for (const group of chunk(wrong)) {
-        const batch = writeBatch(db);
-        group.forEach((item) => {
-          const imported = String(item.registrationSource || '').startsWith('google-forms-csv');
-          batch.update(doc(db, RECORDS_COLLECTION, item.id), { amount: 0, ...(imported ? { paid: false } : {}), updatedAt: nowIso() });
+    const cleanupHandlers: Array<() => void> = [];
+
+    const wirePaymentInputs = () => {
+      const inputs = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="number"]'));
+      inputs.forEach((input) => {
+        const attendee = findAttendeeForAmountInput(input, attendees);
+        if (!attendee) return;
+
+        input.disabled = false;
+        input.removeAttribute('disabled');
+        input.title = 'Escribe el valor pagado. Si es mayor a 0, queda marcado como PAGADO. Si lo dejas en 0, queda PENDIENTE.';
+        input.placeholder = '0';
+
+        if (input.dataset.gembPaymentWired === attendee.id) return;
+        input.dataset.gembPaymentWired = attendee.id;
+
+        const save = async () => {
+          const amount = parseMoneyInput(input.value);
+          await updateDoc(doc(db, RECORDS_COLLECTION, attendee.id), {
+            amount,
+            paid: amount > 0,
+            updatedAt: nowIso(),
+          });
+        };
+
+        const onBlur = () => { void save(); };
+        const onKeyDown = (event: KeyboardEvent) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            input.blur();
+          }
+        };
+
+        input.addEventListener('blur', onBlur);
+        input.addEventListener('keydown', onKeyDown);
+        cleanupHandlers.push(() => {
+          input.removeEventListener('blur', onBlur);
+          input.removeEventListener('keydown', onKeyDown);
         });
-        await batch.commit();
-      }
+      });
     };
-    run().catch((error) => console.error('No se pudieron normalizar valores', error));
+
+    wirePaymentInputs();
+    const observer = new MutationObserver(wirePaymentInputs);
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
+    const interval = window.setInterval(wirePaymentInputs, 1000);
+
+    return () => {
+      observer.disconnect();
+      window.clearInterval(interval);
+      cleanupHandlers.forEach((cleanup) => cleanup());
+    };
   }, [attendees]);
 
   useEffect(() => {
