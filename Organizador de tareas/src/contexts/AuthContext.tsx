@@ -10,13 +10,8 @@ import {
   signOut,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, db, googleProvider, handleFirestoreError, OperationType } from '../lib/firebase';
+import { auth, db, googleProvider } from '../lib/firebase';
 import { User } from '../types';
-
-const OAUTH_IN_PROGRESS_KEY = 'oauth_in_progress';
-const OAUTH_CONTEXT_KEY = 'oauth_browser_context';
-const OAUTH_STARTED_AT_KEY = 'oauth_started_at';
-const OAUTH_FLAG_MAX_AGE_MS = 10 * 60 * 1000;
 
 interface BrowserContextInfo {
   isMobile: boolean;
@@ -49,75 +44,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function safeStorage(type: 'localStorage' | 'sessionStorage') {
-  if (typeof window === 'undefined') return null;
-
-  try {
-    const storage = window[type];
-    const probeKey = `__probe_${type}`;
-    storage.setItem(probeKey, '1');
-    storage.removeItem(probeKey);
-    return storage;
-  } catch {
-    return null;
-  }
-}
-
-function setOAuthFlag(context: BrowserContextInfo) {
-  const storages = [safeStorage('localStorage'), safeStorage('sessionStorage')].filter(Boolean) as Storage[];
-  const payload = JSON.stringify(context);
-  const startedAt = String(Date.now());
-
-  storages.forEach((storage) => {
-    storage.setItem(OAUTH_IN_PROGRESS_KEY, '1');
-    storage.setItem(OAUTH_CONTEXT_KEY, payload);
-    storage.setItem(OAUTH_STARTED_AT_KEY, startedAt);
-  });
-}
-
-function clearOAuthFlag() {
-  const storages = [safeStorage('localStorage'), safeStorage('sessionStorage')].filter(Boolean) as Storage[];
-  storages.forEach((storage) => {
-    storage.removeItem(OAUTH_IN_PROGRESS_KEY);
-    storage.removeItem(OAUTH_CONTEXT_KEY);
-    storage.removeItem(OAUTH_STARTED_AT_KEY);
-  });
-}
-
-function readOAuthFlag() {
-  const storages = [safeStorage('sessionStorage'), safeStorage('localStorage')].filter(Boolean) as Storage[];
-
-  for (const storage of storages) {
-    const inProgress = storage.getItem(OAUTH_IN_PROGRESS_KEY) === '1';
-    const rawContext = storage.getItem(OAUTH_CONTEXT_KEY);
-    const startedAt = storage.getItem(OAUTH_STARTED_AT_KEY);
-    const startedAtMs = startedAt ? Number(startedAt) : null;
-    const isExpired = !startedAtMs || Number.isNaN(startedAtMs) || Date.now() - startedAtMs > OAUTH_FLAG_MAX_AGE_MS;
-
-    if (inProgress || rawContext || startedAt) {
-      if (isExpired) {
-        storage.removeItem(OAUTH_IN_PROGRESS_KEY);
-        storage.removeItem(OAUTH_CONTEXT_KEY);
-        storage.removeItem(OAUTH_STARTED_AT_KEY);
-        continue;
-      }
-
-      return { inProgress, rawContext, startedAt: startedAtMs };
-    }
-  }
-
-  return { inProgress: false, rawContext: null, startedAt: null };
-}
-
-function parseStoredContext(rawContext: string | null): BrowserContextInfo | null {
-  if (!rawContext) return null;
-  try {
-    return JSON.parse(rawContext) as BrowserContextInfo;
-  } catch {
-    return null;
-  }
-}
-
 function detectBrowserContext(): BrowserContextInfo {
   const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent || '';
   const vendor = typeof navigator === 'undefined' ? '' : navigator.vendor || '';
@@ -144,11 +70,11 @@ function detectBrowserContext(): BrowserContextInfo {
 
 function getBrowserHelpText(browserContext: BrowserContextInfo) {
   if (browserContext.isIOS) {
-    return 'Abre este enlace en Safari. En iPhone, toca el menu del navegador actual y elige "Abrir en Safari". Si no aparece, copia el enlace y pegalo manualmente en Safari.';
+    return 'Abre este enlace en Safari. En iPhone, toca el menu del navegador actual y elige Abrir en Safari. Si no aparece, copia el enlace y pegalo manualmente en Safari.';
   }
 
   if (browserContext.isAndroid) {
-    return 'Abre este enlace en Chrome. En Android, toca el menu del navegador actual y elige "Abrir en Chrome". Si no aparece, copia el enlace y pegalo en Chrome.';
+    return 'Abre este enlace en Chrome. En Android, toca el menu del navegador actual y elige Abrir en Chrome. Si no aparece, copia el enlace y pegalo en Chrome.';
   }
 
   return `Abre este enlace en ${browserContext.recommendedBrowser} para iniciar sesion con mas estabilidad.`;
@@ -159,14 +85,25 @@ function getFirebaseErrorCode(error: unknown) {
   return null;
 }
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return String(error || 'Error desconocido');
+}
+
+function isPermissionError(error: unknown) {
+  const code = getFirebaseErrorCode(error);
+  const message = getErrorMessage(error).toLowerCase();
+  return code === 'permission-denied' || code === 'firestore/permission-denied' || message.includes('permission') || message.includes('missing or insufficient permissions');
+}
+
 function getAuthErrorMessage(code: string | null, browserContext?: BrowserContextInfo | null) {
   switch (code) {
     case 'auth/unauthorized-domain':
-      return 'Este dominio no esta autorizado en Firebase Auth. Agrega gestor-talleres-gemb.vercel.app en Authentication > Settings > Authorized domains.';
+      return 'Este dominio no esta autorizado en Firebase Auth. Agrega el dominio de Vercel en Authentication > Settings > Authorized domains.';
     case 'auth/popup-blocked':
       return 'El navegador bloqueo la ventana emergente. Intentaremos continuar con redireccion.';
     case 'auth/popup-closed-by-user':
-      return 'La ventana de inicio de sesion se cerro antes de completar el acceso. Intentaremos continuar con redireccion.';
+      return 'La ventana de inicio de sesion se cerro antes de completar el acceso.';
     case 'auth/cancelled-popup-request':
       return 'Se cancelo el intento anterior de inicio de sesion. Intenta de nuevo.';
     case 'auth/network-request-failed':
@@ -175,8 +112,6 @@ function getAuthErrorMessage(code: string | null, browserContext?: BrowserContex
       return 'Este navegador no permite el flujo de autenticacion. Abre la app en un navegador compatible.';
     case 'auth/persistence-unavailable':
       return 'Este navegador no permite guardar la sesion de forma confiable. Abre la app en un navegador compatible como Safari o Chrome.';
-    case 'auth/redirect-not-completed':
-      return `No pudimos recuperar la sesion despues del redirect. Abre este enlace en ${browserContext?.recommendedBrowser || 'un navegador compatible'} y vuelve a intentarlo.`;
     case 'auth/embedded-browser-blocked':
       return `Este navegador embebido no es compatible con el login. Abre este enlace en ${browserContext?.recommendedBrowser || 'un navegador compatible'} para iniciar sesion.`;
     default:
@@ -198,6 +133,18 @@ async function configurePersistence() {
   }
 }
 
+function buildUserProfile(firebaseUser: typeof auth.currentUser): User {
+  if (!firebaseUser) throw new Error('No hay usuario autenticado.');
+  return {
+    uid: firebaseUser.uid,
+    displayName: firebaseUser.displayName || 'Usuario',
+    email: firebaseUser.email || '',
+    photoURL: firebaseUser.photoURL || '',
+    role: 'collaborator',
+    createdAt: new Date().toISOString(),
+  };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -211,15 +158,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let isActive = true;
-    let authStateKnown = false;
-    let redirectChecked = false;
-
-    const updateLoading = () => {
-      if (isActive && authStateKnown && redirectChecked) setLoading(false);
-    };
-
-    const pendingOAuth = readOAuthFlag();
-    const pendingBrowserContext = parseStoredContext(pendingOAuth.rawContext);
 
     if (browserContext.isEmbedded) {
       setShouldSuggestExternalBrowser(true);
@@ -231,104 +169,78 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthNotice(`Brave en celular no es compatible con el inicio de sesion. Abre la app en ${browserContext.recommendedBrowser} para continuar.`);
     }
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    configurePersistence().then((result) => {
       if (!isActive) return;
-      authStateKnown = true;
-
-      if (firebaseUser) {
-        try {
-          const userDocRef = doc(db, 'users', firebaseUser.uid);
-          const userDoc = await getDoc(userDocRef);
-
-          if (userDoc.exists()) {
-            setUser(userDoc.data() as User);
-          } else {
-            const newUser: User = {
-              uid: firebaseUser.uid,
-              displayName: firebaseUser.displayName || 'Usuario',
-              email: firebaseUser.email || '',
-              photoURL: firebaseUser.photoURL || '',
-              role: 'collaborator',
-              createdAt: new Date().toISOString(),
-            };
-            await setDoc(userDocRef, newUser);
-            setUser(newUser);
-          }
-
-          clearOAuthFlag();
-          setAuthError(null);
-          setAuthErrorCode(null);
-          setAuthNotice(null);
-          setBrowserHelpText(null);
-          setShouldSuggestExternalBrowser(false);
-        } catch (error) {
-          handleFirestoreError(error, OperationType.GET, 'users');
-        }
-      } else {
-        setUser(null);
-      }
-
-      setIsLoggingIn(false);
-      updateLoading();
-    });
-
-    (async () => {
-      const persistenceResult = await configurePersistence();
-      if (!isActive) return;
-
-      if (persistenceResult.mode === 'none') {
+      if (result.mode === 'none') {
         setAuthErrorCode('auth/persistence-unavailable');
-        setAuthError(getAuthErrorMessage('auth/persistence-unavailable'));
+        setAuthError(getAuthErrorMessage('auth/persistence-unavailable', browserContext));
         setBrowserHelpText(getBrowserHelpText(browserContext));
         setShouldSuggestExternalBrowser(true);
-      } else if (persistenceResult.mode === 'session') {
+      } else if (result.mode === 'session') {
         setAuthNotice('La sesion se guardara solo durante esta pestana para maximizar compatibilidad en este navegador.');
       }
+    });
+
+    getRedirectResult(auth).catch((error) => {
+      if (!isActive) return;
+      const code = getFirebaseErrorCode(error);
+      setAuthErrorCode(code);
+      setAuthError(getAuthErrorMessage(code, browserContext));
+      setBrowserHelpText(getBrowserHelpText(browserContext));
+    });
+
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!isActive) return;
 
       try {
-        const redirectResult = await getRedirectResult(auth);
-        if (!isActive) return;
-        redirectChecked = true;
-
-        if (redirectResult?.user) {
-          clearOAuthFlag();
-        } else if (pendingOAuth.inProgress && !auth.currentUser) {
-          const contextForMessage = pendingBrowserContext || browserContext;
-          const code = browserContext.isEmbedded || contextForMessage?.isEmbedded ? 'auth/embedded-browser-blocked' : 'auth/redirect-not-completed';
-          setAuthErrorCode(code);
-          setAuthError(getAuthErrorMessage(code, contextForMessage));
-          setBrowserHelpText(getBrowserHelpText(contextForMessage));
-          setShouldSuggestExternalBrowser(true);
+        if (!firebaseUser) {
+          setUser(null);
+          return;
         }
-      } catch (error) {
-        if (!isActive) return;
-        redirectChecked = true;
-        const code = getFirebaseErrorCode(error);
-        setAuthErrorCode(code);
-        setAuthError(getAuthErrorMessage(code, pendingBrowserContext || browserContext));
-        setBrowserHelpText(getBrowserHelpText(pendingBrowserContext || browserContext));
-        console.error('Error finishing redirect login:', error);
-      }
 
-      updateLoading();
-    })();
+        const userDocRef = doc(db, 'users', firebaseUser.uid);
+        const userDoc = await getDoc(userDocRef);
+
+        if (userDoc.exists()) {
+          setUser(userDoc.data() as User);
+        } else {
+          const newUser = buildUserProfile(firebaseUser);
+          await setDoc(userDocRef, newUser);
+          setUser(newUser);
+        }
+
+        setAuthError(null);
+        setAuthErrorCode(null);
+        setAuthNotice(null);
+        setBrowserHelpText(null);
+        setShouldSuggestExternalBrowser(false);
+      } catch (error) {
+        const email = firebaseUser?.email || 'este correo';
+        console.error('Error loading user profile:', error);
+        setUser(null);
+
+        if (isPermissionError(error)) {
+          setAuthErrorCode('firestore/permission-denied');
+          setAuthError(`La cuenta ${email} inicio sesion con Google, pero no esta autorizada en Firestore. Agrega este correo en Firebase > Firestore > Reglas, o entra con un correo autorizado.`);
+        } else {
+          setAuthErrorCode(getFirebaseErrorCode(error) || 'firestore/profile-error');
+          setAuthError(`No se pudo preparar el perfil de usuario (${email}). ${getErrorMessage(error)}`);
+        }
+
+        await signOut(auth).catch(() => {});
+      } finally {
+        if (isActive) {
+          setIsLoggingIn(false);
+          setLoading(false);
+        }
+      }
+    });
 
     const fallbackTimer = setTimeout(() => {
       if (!isActive) return;
-      if (!authStateKnown) authStateKnown = true;
-      if (!redirectChecked) redirectChecked = true;
-
-      if (pendingOAuth.inProgress && !auth.currentUser) {
-        const contextForMessage = pendingBrowserContext || browserContext;
-        const code = contextForMessage?.isEmbedded ? 'auth/embedded-browser-blocked' : 'auth/redirect-not-completed';
-        setAuthErrorCode(code);
-        setAuthError(getAuthErrorMessage(code, contextForMessage));
-        setBrowserHelpText(getBrowserHelpText(contextForMessage));
-        setShouldSuggestExternalBrowser(true);
-      }
-
-      updateLoading();
-    }, 6000);
+      setIsLoggingIn(false);
+      setLoading(false);
+    }, 8000);
 
     return () => {
       isActive = false;
@@ -363,19 +275,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoggingIn(true);
     const latestContext = detectBrowserContext();
 
-    if (latestContext.isEmbedded) {
-      setOAuthFlag(latestContext);
+    if (latestContext.isEmbedded || latestContext.isBraveMobile) {
       setAuthErrorCode('auth/embedded-browser-blocked');
       setAuthError(getAuthErrorMessage('auth/embedded-browser-blocked', latestContext));
-      setBrowserHelpText(getBrowserHelpText(latestContext));
-      setShouldSuggestExternalBrowser(true);
-      setIsLoggingIn(false);
-      return;
-    }
-
-    if (latestContext.isBraveMobile) {
-      setAuthErrorCode('auth/embedded-browser-blocked');
-      setAuthError(`Brave en celular no es compatible con el inicio de sesion de Google. Abre este enlace en ${latestContext.recommendedBrowser}.`);
       setBrowserHelpText(getBrowserHelpText(latestContext));
       setShouldSuggestExternalBrowser(true);
       setIsLoggingIn(false);
@@ -393,14 +295,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setAuthNotice(persistenceResult.mode === 'session' ? 'La sesion se guardara solo durante esta pestana para maximizar compatibilidad en este navegador.' : null);
-    setOAuthFlag(latestContext);
 
     try {
       await signInWithPopup(auth, googleProvider);
-      clearOAuthFlag();
     } catch (error) {
       const code = getFirebaseErrorCode(error);
-      const shouldFallbackToRedirect = code === 'auth/popup-blocked' || code === 'auth/popup-closed-by-user' || code === 'auth/operation-not-supported-in-this-environment';
+      const shouldFallbackToRedirect = code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment';
 
       if (shouldFallbackToRedirect) {
         try {
@@ -414,7 +314,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setBrowserHelpText(getBrowserHelpText(latestContext));
           console.error('Error logging in with redirect fallback:', redirectError);
           setIsLoggingIn(false);
-          clearOAuthFlag();
           return;
         }
       }
@@ -427,13 +326,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Error logging in:', error);
       }
       setIsLoggingIn(false);
-      clearOAuthFlag();
     }
   };
 
   const logout = async () => {
     try {
       await signOut(auth);
+      setUser(null);
     } catch (error) {
       console.error('Error logging out:', error);
     }
