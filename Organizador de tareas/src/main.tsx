@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './AppOperationalFix.tsx';
+import { PaymentAmountBridge } from './PaymentAmountBridge.tsx';
 import './index.css';
 
 if (window.location.hostname === '127.0.0.1') {
@@ -8,6 +9,7 @@ if (window.location.hostname === '127.0.0.1') {
 } else {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
+      <PaymentAmountBridge />
       <App />
     </StrictMode>,
   );
