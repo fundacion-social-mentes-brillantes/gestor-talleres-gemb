@@ -1,1 +1,117 @@
 @import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #03050b;
+  color: #f8fafc;
+}
+
+html {
+  min-height: 100%;
+  background: #03050b;
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  background: #03050b;
+  color: #f8fafc;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(246, 182, 52, 0.35);
+  color: #fffaf0;
+}
+
+.luxury-bg {
+  background:
+    linear-gradient(115deg, rgba(3, 5, 11, 0.98) 0%, rgba(4, 10, 23, 0.98) 42%, rgba(12, 8, 15, 0.98) 100%),
+    linear-gradient(155deg, rgba(246, 182, 52, 0.1), transparent 38%, rgba(56, 189, 248, 0.08) 72%, transparent 100%);
+}
+
+.luxury-grid {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  opacity: 0.34;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(120deg, transparent 0%, rgba(246, 182, 52, 0.16) 46%, transparent 54%, transparent 100%);
+  background-size:
+    48px 48px,
+    48px 48px,
+    100% 100%;
+  mask-image: linear-gradient(to bottom, black, transparent 86%);
+}
+
+.gold-text {
+  background: linear-gradient(135deg, #fff8c7 0%, #f6d77a 28%, #f4b236 62%, #a86107 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.gold-divider {
+  background: linear-gradient(90deg, transparent, rgba(246, 182, 52, 0.65), transparent);
+}
+
+.premium-input {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: rgba(2, 6, 23, 0.48);
+  color: #fff7ed;
+  outline: none;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.premium-input::placeholder {
+  color: rgba(148, 163, 184, 0.72);
+}
+
+.premium-input:focus {
+  border-color: rgba(252, 211, 77, 0.72);
+  background: rgba(2, 6, 23, 0.66);
+  box-shadow: 0 0 0 3px rgba(246, 182, 52, 0.16);
+}
+
+.premium-scrollbar {
+  scrollbar-color: rgba(246, 182, 52, 0.35) rgba(15, 23, 42, 0.36);
+  scrollbar-width: thin;
+}
+
+.premium-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.premium-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.36);
+}
+
+.premium-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(246, 182, 52, 0.35);
+  border: 2px solid rgba(15, 23, 42, 0.36);
+  border-radius: 999px;
+}

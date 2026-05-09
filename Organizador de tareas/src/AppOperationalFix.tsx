@@ -2,6 +2,10 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import AppSecure from './AppSecure';
 import { auth, db } from './lib/firebase';
 import { addDoc, collection, doc, getDocs, onSnapshot, query, serverTimestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { CheckCircle2, Clock3, Search, ShieldCheck, UserCheck, Users, X } from 'lucide-react';
+import { GlassPanel } from './components/ui/GlassPanel';
+import { Logo } from './components/ui/Logo';
+import { PremiumButton } from './components/ui/PremiumButton';
 
 const RECORDS_COLLECTION = 'tasks';
 const MAX_IMPORT_ROWS = 5000;
@@ -297,40 +301,57 @@ function ArrivalModal({ open, onClose, rows, workshops }: { open: boolean; onClo
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[9998] overflow-y-auto bg-[#050816]/95 p-4 text-white backdrop-blur-xl">
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-5 rounded-[2rem] border border-cyan-400/20 bg-white/[0.055] p-5 shadow-2xl">
+    <div className="luxury-bg fixed inset-0 z-[9998] overflow-y-auto p-4 text-white backdrop-blur-xl">
+      <div className="luxury-grid" aria-hidden="true" />
+      <div className="relative mx-auto max-w-6xl">
+        <GlassPanel className="mb-5" tone="cyan">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-cyan-200">Modo portería</p>
+            <div className="flex items-start gap-4">
+              <div className="hidden rounded-lg border border-cyan-200/18 bg-black/24 p-2 sm:block">
+                <Logo variant="symbol" className="h-20 w-28" />
+              </div>
+              <div>
+              <p className="text-sm font-black uppercase text-cyan-100">Modo portería</p>
               <h2 className="mt-2 text-3xl font-black">Orden de llegada real</h2>
-              <p className="mt-1 text-sm text-slate-300">Aquí sí aparecen todos. Marca llegada y se ordenan por hora.</p>
+              <p className="mt-1 text-sm text-slate-300">Busca asistentes, marca entrada en vivo y conserva el orden por hora.</p>
+              </div>
             </div>
-            <button onClick={onClose} className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-black hover:bg-white/10">Cerrar</button>
+            <PremiumButton onClick={onClose} icon={<X size={17} />} variant="ghost" size="lg">Cerrar</PremiumButton>
           </div>
           <div className="mt-5 grid gap-3 md:grid-cols-3">
-            <div className="rounded-2xl border border-white/10 bg-black/25 p-4"><p className="text-xs font-bold text-slate-400">Inscritos</p><p className="text-3xl font-black">{rows.length}</p></div>
-            <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4"><p className="text-xs font-bold text-cyan-200">En sala</p><p className="text-3xl font-black">{arrived}</p></div>
-            <div className="rounded-2xl border border-orange-400/20 bg-orange-500/10 p-4"><p className="text-xs font-bold text-orange-200">Pendientes</p><p className="text-3xl font-black">{Math.max(rows.length - arrived, 0)}</p></div>
+            <div className="rounded-lg border border-white/10 bg-black/24 p-4"><p className="flex items-center gap-2 text-xs font-bold text-slate-400"><Users size={15} /> Inscritos</p><p className="mt-2 text-3xl font-black">{rows.length}</p></div>
+            <div className="rounded-lg border border-cyan-300/22 bg-cyan-400/10 p-4"><p className="flex items-center gap-2 text-xs font-bold text-cyan-100"><UserCheck size={15} /> En sala</p><p className="mt-2 text-3xl font-black">{arrived}</p></div>
+            <div className="rounded-lg border border-amber-300/22 bg-amber-300/10 p-4"><p className="flex items-center gap-2 text-xs font-bold text-amber-100"><Clock3 size={15} /> Pendientes</p><p className="mt-2 text-3xl font-black">{Math.max(rows.length - arrived, 0)}</p></div>
           </div>
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nombre, correo, celular o taller" className="mt-4 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-4 text-sm font-bold outline-none placeholder:text-slate-500 focus:border-cyan-300" />
-        </div>
+          <div className="relative mt-4">
+            <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nombre, correo, celular, documento o taller" className="premium-input py-4 pl-12 pr-4 text-sm font-semibold" autoFocus />
+          </div>
+        </GlassPanel>
         <div className="space-y-3 pb-8">
           {filtered.map((item) => {
             const position = item.attended && item.checkInTime ? rows.filter((r) => r.attended && r.checkInTime && Number(r.checkInTime) <= Number(item.checkInTime)).length : null;
             return (
-              <div key={item.id} className={`grid gap-3 rounded-3xl border p-4 md:grid-cols-[72px_1fr_auto] md:items-center ${item.attended ? 'border-cyan-400/25 bg-cyan-500/10' : 'border-white/10 bg-white/[0.04]'}`}>
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-black/30 text-xl font-black text-cyan-200">{position || '--'}</div>
+              <div key={item.id} className={`grid gap-3 rounded-lg border p-4 shadow-[0_16px_44px_rgba(0,0,0,0.22)] backdrop-blur-2xl md:grid-cols-[72px_1fr_auto] md:items-center ${item.attended ? 'border-cyan-300/25 bg-cyan-400/10' : 'border-white/10 bg-white/[0.052]'}`}>
+                <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-white/10 bg-black/30 text-xl font-black text-cyan-100">{position || '--'}</div>
                 <div className="min-w-0">
                   <p className="truncate text-lg font-black uppercase">{item.name}</p>
-                  <p className="mt-1 truncate text-xs font-bold uppercase tracking-wide text-slate-400">{workshopById.get(item.workshopId) || 'SIN TALLER'} · {item.email || item.phone || 'sin contacto'}</p>
+                  <p className="mt-1 truncate text-xs font-bold uppercase text-slate-400">{workshopById.get(item.workshopId) || 'SIN TALLER'} · {item.email || item.phone || 'sin contacto'}</p>
                   <p className="mt-1 text-xs text-slate-400">Hora: {timeText(item.checkInTime)}</p>
                 </div>
-                <button disabled={busy === item.id} onClick={() => toggle(item)} className={`rounded-2xl px-5 py-3 text-sm font-black uppercase transition disabled:opacity-60 ${item.attended ? 'border border-red-400/30 text-red-200 hover:bg-red-500/10' : 'bg-cyan-400 text-slate-950 hover:bg-cyan-300'}`}>{busy === item.id ? 'Guardando...' : item.attended ? 'Retirar' : 'Marcar llegada'}</button>
+                <PremiumButton disabled={busy === item.id} onClick={() => toggle(item)} icon={busy === item.id ? <Clock3 size={16} /> : item.attended ? <X size={16} /> : <CheckCircle2 size={16} />} variant={item.attended ? 'danger' : 'cyan'} size="lg">
+                  {busy === item.id ? 'Guardando...' : item.attended ? 'Retirar' : 'Marcar llegada'}
+                </PremiumButton>
               </div>
             );
           })}
-          {!filtered.length && <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-10 text-center text-slate-400">No hay asistentes para mostrar.</div>}
+          {!filtered.length && (
+            <GlassPanel className="text-center" tone="cyan">
+              <ShieldCheck className="mx-auto text-cyan-100" size={42} />
+              <p className="mt-4 text-lg font-black text-white">No hay asistentes para mostrar.</p>
+              <p className="mt-2 text-sm text-slate-400">Ajusta la búsqueda o importa la lista del taller.</p>
+            </GlassPanel>
+          )}
         </div>
       </div>
     </div>
@@ -418,11 +439,12 @@ export default function AppOperationalFix() {
       <ArrivalModal open={arrivalOpen} onClose={() => setArrivalOpen(false)} rows={attendees} workshops={workshops} />
       <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={onFileSelected} />
       {importing && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 text-white backdrop-blur-sm">
-          <div className="rounded-3xl border border-orange-400/30 bg-slate-950 p-6 text-center shadow-2xl">
-            <p className="text-lg font-black">Importando CSV inteligente...</p>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/72 p-4 text-white backdrop-blur-sm">
+          <GlassPanel tone="gold" className="max-w-sm text-center">
+            <Logo variant="symbol" className="mx-auto h-24 w-40" />
+            <p className="mt-4 text-lg font-black">Importando CSV inteligente...</p>
             <p className="mt-2 text-sm text-slate-300">Nombre, correo, documento y WhatsApp. Pago pendiente y valor 0.</p>
-          </div>
+          </GlassPanel>
         </div>
       )}
     </>
